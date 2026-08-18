@@ -1,0 +1,246 @@
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { useAuth } from '../../context/AuthContext'
+import { ThemeToggle } from '../ui/ThemeToggle'
+import { dashboardRouteForRole } from '../../utils/routes'
+import type { Role } from '../../types/auth'
+
+/* ── SVG Icons ────────────────────────────────────────────────────── */
+
+const OverviewIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+)
+
+const AcademicsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <path d="M4 5c2-1 5-1 7 0v14c-2-1-5-1-7 0V5Z" />
+    <path d="M20 5c-2-1-5-1-7 0v14c2-1 5-1 7 0V5Z" />
+  </svg>
+)
+
+const AttendanceIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+)
+
+const SkillsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" width="18" height="18">
+    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+  </svg>
+)
+
+const PlacementIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M3 12h18" />
+  </svg>
+)
+
+const RiskIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" width="18" height="18">
+    <path d="M12 3 2 20h20L12 3Z" />
+    <path d="M12 9v5" />
+    <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+const SettingsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+  </svg>
+)
+
+const LogoutIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+)
+
+/* ── Helpers ────────────────────────────────────────────────────── */
+
+interface NavEntry {
+  label: string
+  href: string
+  icon: React.FC
+}
+
+function getNavItems(role: Role): NavEntry[] {
+  const dashboard = dashboardRouteForRole(role)
+  return [
+    { label: 'Overview', href: dashboard, icon: OverviewIcon },
+    { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
+    { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
+    { label: 'Skills & Portfolio', href: '/features/skills', icon: SkillsIcon },
+    { label: 'Placement Readiness', href: '/features/placement', icon: PlacementIcon },
+    { label: 'Risk & Alerts', href: '/features/risk', icon: RiskIcon },
+  ]
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
+
+function getRoleLabel(role: Role): string {
+  const labels: Record<string, string> = {
+    student: 'STUDENT',
+    admin: 'ADMIN',
+    faculty: 'FACULTY',
+    parent: 'PARENT',
+    placement_cell: 'PLACEMENT',
+    recruiter: 'RECRUITER',
+  }
+  return labels[role] ?? role.toUpperCase()
+}
+
+function getSessionPill(role: Role): { cls: string; text: string } {
+  switch (role) {
+    case 'admin':
+    case 'faculty':
+      return { cls: 'secure', text: '2FA verified · write access active' }
+    case 'parent':
+      return { cls: 'locked', text: 'Read-only session · no write access' }
+    default:
+      return { cls: 'standard', text: 'Standard session · device remembered' }
+  }
+}
+
+/* ── Component ─────────────────────────────────────────────────── */
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  const { session, logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  if (!session) return null
+
+  const navItems = getNavItems(session.role)
+  const initials = getInitials(session.name)
+  const roleLabel = getRoleLabel(session.role)
+  const pill = getSessionPill(session.role)
+
+  const onLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  return (
+    <div className="layout">
+      {/* ===== SIDEBAR ===== */}
+      <aside className="sidebar">
+        <div className="fg-brand">
+          <div className="fg-glyph">F</div>
+          <span>FORGR</span>
+        </div>
+
+        <div className="fg-nav-label">Workspace</div>
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.href
+          return (
+            <NavLink
+              key={item.label}
+              to={item.href}
+              className={`fg-nav-item${isActive ? ' active' : ''}`}
+            >
+              <item.icon />
+              {item.label}
+            </NavLink>
+          )
+        })}
+
+        <div className="fg-nav-label">System</div>
+        <NavLink
+          to="/features/settings"
+          className={`fg-nav-item${location.pathname === '/features/settings' ? ' active' : ''}`}
+        >
+          <SettingsIcon />
+          Settings
+        </NavLink>
+
+        <button type="button" className="fg-logout-btn" onClick={onLogout}>
+          <LogoutIcon />
+          Logout
+        </button>
+
+        <div className="fg-sidebar-foot">
+          <div className="fg-avatar-sm">{initials}</div>
+          <div className="fg-who">
+            <div>{session.name}</div>
+            <div className="fg-role">{roleLabel}</div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ===== MAIN ===== */}
+      <main className="main">
+        <div className="topbar">
+          <div>
+            <h1>
+              {location.pathname === '/features/academics' ? 'Academic Intelligence' :
+               location.pathname === '/features/attendance' ? 'Attendance Analytics' :
+               location.pathname === '/features/skills' ? 'Skills & Portfolio' :
+               location.pathname === '/features/placement' ? 'Placement Readiness' :
+               location.pathname === '/features/risk' ? 'Risk Engine & Alerts' :
+               location.pathname === '/features/settings' ? 'Settings & Preferences' :
+               session.role === 'student' ? 'Your profile' :
+               session.role === 'admin' || session.role === 'faculty' ? 'Cohort overview' :
+               session.role === 'parent' ? "Ward's report" : 'Dashboard'}
+              {session.role === 'parent' && (
+                <span className="fg-readonly-pill">🔒 VIEW ONLY</span>
+              )}
+            </h1>
+            <div className="fg-sub">
+              {location.pathname.startsWith('/features/')
+                ? 'Direct feature intelligence view.'
+                : session.role === 'student'
+                  ? 'Everything FORGR has forged from your record so far.'
+                  : session.role === 'admin' || session.role === 'faculty'
+                    ? `Tracking students across sections.`
+                    : session.role === 'parent'
+                      ? "A read-only summary generated from your ward's FORGR profile."
+                      : `Welcome, ${session.name}.`}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <ThemeToggle />
+            <div className={`fg-session-pill ${pill.cls}`}>
+              <span className="fg-dot" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="16" height="16">
+                {pill.cls === 'secure' ? (
+                  <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+                ) : pill.cls === 'locked' ? (
+                  <>
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                ) : (
+                  <>
+                    <rect x="4" y="10" width="16" height="10" rx="2" />
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                  </>
+                )}
+              </svg>
+              <span>{pill.text}</span>
+            </div>
+          </div>
+        </div>
+        {children}
+      </main>
+    </div>
+  )
+}

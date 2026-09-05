@@ -1,8 +1,7 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import type { ReactNode } from 'react'
-import { useAuth } from '../../context/AuthContext'
+import { useState, type ReactNode } from 'react'
+import { useAuth } from '../../context/useAuth'
 import { ThemeToggle } from '../ui/ThemeToggle'
-import { dashboardRouteForRole } from '../../utils/routes'
 import type { Role } from '../../types/auth'
 
 /* ── SVG Icons ────────────────────────────────────────────────────── */
@@ -52,6 +51,21 @@ const RiskIcon = () => (
   </svg>
 )
 
+const ImportIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+)
+
+const HistoryIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 7 12 12 15 15" />
+  </svg>
+)
+
 const SettingsIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
     <circle cx="12" cy="12" r="3" />
@@ -76,9 +90,55 @@ interface NavEntry {
 }
 
 function getNavItems(role: Role): NavEntry[] {
-  const dashboard = dashboardRouteForRole(role)
+  if (role === 'admin') {
+    return [
+      { label: 'Overview', href: '/admin', icon: OverviewIcon },
+      { label: 'Bulk Import', href: '/admin/bulk-import', icon: ImportIcon },
+      { label: 'Import History', href: '/admin/import-history', icon: HistoryIcon },
+      { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
+      { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
+      { label: 'Placement Readiness', href: '/features/placement', icon: PlacementIcon },
+      { label: 'Risk & Alerts', href: '/features/risk', icon: RiskIcon },
+    ]
+  }
+
+  if (role === 'faculty') {
+    return [
+      { label: 'Overview', href: '/faculty', icon: OverviewIcon },
+      { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
+      { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
+      { label: 'Risk & Alerts', href: '/features/risk', icon: RiskIcon },
+      { label: 'Skills & Assessments', href: '/features/skills', icon: SkillsIcon },
+    ]
+  }
+
+  if (role === 'placement_cell') {
+    return [
+      { label: 'Overview', href: '/placement', icon: OverviewIcon },
+      { label: 'Placement Readiness', href: '/features/placement', icon: PlacementIcon },
+      { label: 'Skills & Talent', href: '/features/skills', icon: SkillsIcon },
+    ]
+  }
+
+  if (role === 'recruiter') {
+    return [
+      { label: 'Overview', href: '/recruiter', icon: OverviewIcon },
+      { label: 'Placement & Talent', href: '/features/placement', icon: PlacementIcon },
+    ]
+  }
+
+  if (role === 'parent') {
+    return [
+      { label: 'Ward Overview', href: '/parent', icon: OverviewIcon },
+      { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
+      { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
+      { label: 'Risk & Interventions', href: '/features/risk', icon: RiskIcon },
+    ]
+  }
+
+  // Student default
   return [
-    { label: 'Overview', href: dashboard, icon: OverviewIcon },
+    { label: 'Overview', href: '/student', icon: OverviewIcon },
     { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
     { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
     { label: 'Skills & Portfolio', href: '/features/skills', icon: SkillsIcon },
@@ -126,6 +186,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { session, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   if (!session) return null
 
@@ -139,10 +200,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
+  const closeMobileNav = () => setMobileNavOpen(false)
+
   return (
     <div className="layout">
+      <button
+        type="button"
+        className="fg-mobile-nav-toggle"
+        aria-label="Open navigation"
+        aria-expanded={mobileNavOpen}
+        onClick={() => setMobileNavOpen((open) => !open)}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
+      {mobileNavOpen && <button type="button" className="fg-mobile-nav-backdrop" aria-label="Close navigation" onClick={closeMobileNav} />}
       {/* ===== SIDEBAR ===== */}
-      <aside className="sidebar">
+      <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}`}>
         <div className="fg-brand">
           <div className="fg-glyph">F</div>
           <span>FORGR</span>
@@ -156,6 +231,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               key={item.label}
               to={item.href}
               className={`fg-nav-item${isActive ? ' active' : ''}`}
+              onClick={closeMobileNav}
             >
               <item.icon />
               {item.label}
@@ -167,6 +243,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <NavLink
           to="/features/settings"
           className={`fg-nav-item${location.pathname === '/features/settings' ? ' active' : ''}`}
+          onClick={closeMobileNav}
         >
           <SettingsIcon />
           Settings

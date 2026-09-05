@@ -23,6 +23,11 @@ def _clean_sid(raw) -> str:
     return str(raw).replace(".0", "").strip()
 
 
+def _table_is_empty(db, model) -> bool:
+    return db.query(model).first() is None
+
+
+
 def import_students(db, force=False):
     if not force and not _table_is_empty(db, models.Student):
         print("  [SKIP]  students table already populated – skipping")
@@ -195,13 +200,38 @@ def main():
 
     db = SessionLocal()
     try:
-        import_students(db, force=force)
-        import_academics(db, force=force)
-        import_attendance(db, force=force)
-        import_skills(db, force=force)
-        import_placement(db, force=force)
-        import_portfolio(db, force=force)
-        import_risk_predictions(db, force=force)
+        root_dir = Path(__file__).resolve().parent.parent
+        unified_csv = root_dir / "combined_student_data_different.csv"
+
+        if unified_csv.exists():
+            print(f"[INFO] Found unified user dataset: {unified_csv.name}")
+            from API.bulk_import import _parse_csv, _process_unified_dataset_rows
+            with open(unified_csv, "rb") as f:
+                content = f.read()
+            rows = _parse_csv(content)
+            res = _process_unified_dataset_rows(
+                db=db,
+                rows=rows,
+                current_user_email="system@forgr.app",
+                replace_existing=force or _table_is_empty(db, models.Student),
+            )
+            print(f"  [OK] Processed {res['imported']} records from {unified_csv.name}")
+            if res.get("analysis_report"):
+                rep = res["analysis_report"]
+                print(f"  [ANALYSIS] Health: {rep['cohort_health']}, Avg CGPA: {rep['avg_cgpa']}, Avg Att: {rep['avg_attendance']}%, Avg Employability: {rep['avg_employability']}")
+        else:
+            import_students(db, force=force)
+            import_academics(db, force=force)
+            import_attendance(db, force=force)
+            import_skills(db, force=force)
+            import_placement(db, force=force)
+            import_portfolio(db, force=force)
+            import_risk_predictions(db, force=force)
+
+        # Ensure essential demo auth users exist
+        import crud
+        crud.seed_default_auth_users(db)
+
         print("\n[SUCCESS] All datasets imported and synchronized successfully!")
     except Exception as exc:
         db.rollback()
@@ -209,6 +239,7 @@ def main():
         raise
     finally:
         db.close()
+
 
 
 if __name__ == "__main__":

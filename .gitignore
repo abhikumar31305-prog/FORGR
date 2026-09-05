@@ -2,7 +2,18 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+
+# Env & Backups
 .env
+.env.local
 *.bak
 backend/*.bak
 *.db.bak

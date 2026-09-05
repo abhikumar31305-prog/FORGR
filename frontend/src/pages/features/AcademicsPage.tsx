@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { getAcademics, updateAcademics } from '../../services/featureApi'
 import type { AcademicRecord } from '../../types/domain'
 

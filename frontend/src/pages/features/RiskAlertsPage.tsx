@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import {
   getRisk,
   updateRisk,
@@ -513,7 +513,9 @@ export function RiskAlertsPage() {
           {simResult && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--graphite)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--line-soft)' }}>
               <div style={{ textAlign: 'center', padding: '0.5rem' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Projected Risk Level</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+                  Projected Risk Level {isSimulating && <span style={{ color: 'var(--ember)' }}>⚡</span>}
+                </div>
                 <div style={{ fontSize: '1.4rem', fontWeight: 800, color: simResult.projected_risk === 'High' ? '#EF4444' : simResult.projected_risk === 'Medium' ? '#F59E0B' : '#22C55E', marginTop: '4px' }}>
                   {simResult.projected_risk} RISK
                 </div>

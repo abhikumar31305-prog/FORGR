@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import crud
 import models
-from auth import get_db, require_role
+from auth import check_student_access, get_db, require_role
 from ml.placement.predict import predict_placement
 
 router = APIRouter(prefix="/api/placement", tags=["Placement Readiness"])
@@ -39,8 +39,9 @@ def predict_placement_readiness(payload: PlacementPredictionRequest):
 def get_student_placement_prediction(
     student_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("student", "faculty", "placement_cell", "recruiter", "admin")),
+    current_user: models.User = Depends(require_role("student", "faculty", "placement_cell", "recruiter", "admin")),
 ):
+    check_student_access(current_user, student_id, db)
     """
     Fetch student database placement metrics and predict placement probability and LPA.
     """

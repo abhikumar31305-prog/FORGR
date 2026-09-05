@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { getAdminDashboardData } from '../../services/dashboardApi'
 import { getStudents } from '../../services/studentsApi'
 import { getStudentProfile, updateStudentProfile } from '../../services/profileApi'
@@ -38,7 +39,6 @@ export function AdminDashboardPage() {
   const [profileLoading, setProfileLoading] = useState(false)
   const [error, setError] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
-
   useEffect(() => {
     async function load() {
       setIsLoading(true); setError(''); setSaveMessage('')
@@ -54,10 +54,6 @@ export function AdminDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedStudentId && students.length) setSelectedStudentId(students[0].student_id)
-  }, [selectedStudentId, students])
-
-  useEffect(() => {
     async function loadProfile() {
       if (!selectedStudentId) { setProfile(null); return }
       setProfileLoading(true); setError('')
@@ -71,6 +67,8 @@ export function AdminDashboardPage() {
     void loadProfile()
   }, [selectedStudentId])
 
+  const [searchQuery, setSearchQuery] = useState('')
+
   const branches = useMemo(() => ['all', ...new Set(students.map((s) => s.department))], [students])
 
   const filteredRows = useMemo(() => {
@@ -78,23 +76,23 @@ export function AdminDashboardPage() {
     return data.studentRows.filter((r) => {
       const b = branchFilter === 'all' || r.department === branchFilter
       const y = yearFilter === 'all' || String(r.year) === yearFilter
-      return b && y
+      const q = !searchQuery.trim() || r.name.toLowerCase().includes(searchQuery.toLowerCase()) || r.student_id.toLowerCase().includes(searchQuery.toLowerCase()) || r.department.toLowerCase().includes(searchQuery.toLowerCase())
+      return b && y && q
     })
-  }, [branchFilter, data, yearFilter])
+  }, [branchFilter, data, searchQuery, yearFilter])
 
-  const selectedStudent = useMemo(() => students.find((s) => s.student_id === selectedStudentId) ?? null, [selectedStudentId, students])
+  const effectiveSelectedStudentId = filteredRows.some((row) => row.student_id === selectedStudentId)
+    ? selectedStudentId
+    : filteredRows[0]?.student_id ?? ''
 
-  useEffect(() => {
-    if (!filteredRows.length) { setSelectedStudentId(''); return }
-    if (!filteredRows.some((r) => r.student_id === selectedStudentId)) setSelectedStudentId(filteredRows[0].student_id)
-  }, [filteredRows, selectedStudentId])
+  const selectedStudent = useMemo(() => students.find((s) => s.student_id === effectiveSelectedStudentId) ?? null, [effectiveSelectedStudentId, students])
 
   const onSave = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!selectedStudentId) { setError('Select a student.'); return }
+    if (!effectiveSelectedStudentId) { setError('Select a student.'); return }
     setIsSaving(true); setError(''); setSaveMessage('')
     try {
-      const u = await updateStudentProfile(selectedStudentId, { attendancePercent: Number(attendanceText) || 0, marks: textToMarks(marksText) })
+      const u = await updateStudentProfile(effectiveSelectedStudentId, { attendancePercent: Number(attendanceText) || 0, marks: textToMarks(marksText) })
       setProfile(u); setAttendanceText(String(u.attendancePercent)); setMarksText(marksToText(u.marks))
       setSaveMessage('Student profile updated successfully.')
     } catch (err) {
@@ -119,8 +117,8 @@ export function AdminDashboardPage() {
         </div>
         <div className="fg-stat-card" style={{ '--accent': 'var(--patina)' } as React.CSSProperties}>
           <div className="fg-lbl">Avg. employability</div>
-          <div className="fg-val">76<span className="fg-u">/100</span></div>
-          <div className="fg-delta up">▲ this term</div>
+          <div className="fg-val">{data.avgEmployability ?? 74}<span className="fg-u">/100</span></div>
+          <div className="fg-delta up">▲ live cohort metric</div>
         </div>
         <div className="fg-stat-card" style={{ '--accent': 'var(--ember)' } as React.CSSProperties}>
           <div className="fg-lbl">At-risk students</div>
@@ -136,7 +134,46 @@ export function AdminDashboardPage() {
 
       {/* ── Risk queue table ── */}
       <div className="fg-row fg-card">
-        <h3>Risk queue <span className="fg-card-action">Export list</span></h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <h3 style={{ margin: 0 }}>Risk queue</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link
+              to="/admin/bulk-import"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 8,
+                background: 'var(--ember, #FF5A28)',
+                color: '#FFF',
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(255,90,40,0.3)',
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload New Dataset (ML Sync)
+            </Link>
+            <button type="button" className="fg-card-action" onClick={() => {
+              const headers = ['Student ID', 'Name', 'Department', 'Year', 'Risk', 'Attendance', 'Employability']
+              const rows = data.studentRows.map((row) => [row.student_id, row.name, row.department, row.year, row.overall_risk, row.attendance_percentage ?? '', row.employability_score ?? ''])
+              const csv = [headers, ...rows].map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n')
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+              const link = document.createElement('a')
+              link.href = url
+              link.download = 'forgr-student-directory.csv'
+              link.click()
+              URL.revokeObjectURL(url)
+            }}>Export list</button>
+          </div>
+        </div>
         <div className="fg-cap">Sorted by urgency. Flags trigger automatically from attendance, backlog and dropout models.</div>
 
         {data.alerts.length > 0 && (
@@ -166,7 +203,7 @@ export function AdminDashboardPage() {
           </thead>
           <tbody>
             {filteredRows.filter((r) => r.overall_risk !== 'Low').slice(0, 8).map((row) => (
-              <tr key={row.student_id} className={row.student_id === selectedStudentId ? 'selected-row' : ''} onClick={() => setSelectedStudentId(row.student_id)} style={{ cursor: 'pointer' }}>
+              <tr key={row.student_id} className={row.student_id === effectiveSelectedStudentId ? 'selected-row' : ''} onClick={() => setSelectedStudentId(row.student_id)} style={{ cursor: 'pointer' }}>
                 <td>
                   <div className="fg-name-cell">
                     <div className="fg-init">{getInitials(row.name)}</div>
@@ -176,27 +213,44 @@ export function AdminDashboardPage() {
                 <td><span className={`fg-badge ${riskBadgeClass(row.overall_risk)}`}>{row.overall_risk.toUpperCase()}</span></td>
                 <td>{row.attendance_percentage != null ? `${Math.round(row.attendance_percentage)}%` : '—'}</td>
                 <td>{row.employability_score != null ? `${Math.round(row.employability_score)}/100` : '—'}</td>
-                <td><button className="fg-mini-btn" type="button">Intervene</button></td>
+                <td><button className="fg-mini-btn" type="button" onClick={(event) => { event.stopPropagation(); setSelectedStudentId(row.student_id) }}>Review</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* ── Cohort ranking + Faculty tools ── */}
-      <div className="fg-row fg-grid fg-g2">
+      {/* ── Cohort ranking ── */}
+      <div className="fg-row">
         <div className="fg-card">
-          <h3>Student table</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Student directory</h3>
+            <input
+              type="text"
+              placeholder="🔍 Search student or ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                background: 'var(--steel, #1D1F23)',
+                border: '1px solid var(--line, #303237)',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 12,
+                color: 'var(--off-white, #ECEAE5)',
+                width: 170,
+              }}
+            />
+          </div>
           <div className="fg-filter-row">
             {branches.map((b) => (
-              <span key={b} className={`fg-filter-chip ${branchFilter === b ? 'active' : ''}`} onClick={() => setBranchFilter(b)}>
+              <button type="button" key={b} className={`fg-filter-chip ${branchFilter === b ? 'active' : ''}`} onClick={() => setBranchFilter(b)}>
                 {b === 'all' ? 'All branches' : b}
-              </span>
+              </button>
             ))}
             {['all', '1', '2', '3', '4'].map((y) => (
-              <span key={y} className={`fg-filter-chip ${yearFilter === y ? 'active' : ''}`} onClick={() => setYearFilter(y)}>
+              <button type="button" key={y} className={`fg-filter-chip ${yearFilter === y ? 'active' : ''}`} onClick={() => setYearFilter(y)}>
                 {y === 'all' ? 'All years' : `Year ${y}`}
-              </span>
+              </button>
             ))}
           </div>
 
@@ -204,7 +258,7 @@ export function AdminDashboardPage() {
             <thead><tr><th>#</th><th>Student</th><th>CGPA</th><th>Risk</th></tr></thead>
             <tbody>
               {filteredRows.slice(0, 12).map((r, i) => (
-                <tr key={r.student_id} className={r.student_id === selectedStudentId ? 'selected-row' : ''} onClick={() => setSelectedStudentId(r.student_id)} style={{ cursor: 'pointer' }}>
+                <tr key={r.student_id} className={r.student_id === effectiveSelectedStudentId ? 'selected-row' : ''} onClick={() => setSelectedStudentId(r.student_id)} style={{ cursor: 'pointer' }}>
                   <td>{i + 1}</td>
                   <td>{r.name}</td>
                   <td>{r.cgpa?.toFixed(2) ?? '—'}</td>
@@ -216,30 +270,6 @@ export function AdminDashboardPage() {
           {filteredRows.length > 12 && <div className="fg-cap" style={{ textAlign: 'center', marginTop: 8 }}>Showing 12 of {filteredRows.length} students</div>}
         </div>
 
-        <div className="fg-card">
-          <h3>Faculty tools</h3>
-          <div className="fg-cap">Write-access actions — logged to the audit trail.</div>
-          <div className="fg-grid" style={{ gap: 10 }}>
-            <div className="fg-tool-tile">
-              <div className="fg-tool-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></svg>
-              </div>
-              <div><div className="fg-t">Bulk upload marks / attendance</div><div className="fg-d">CSV import for a section or subject</div></div>
-            </div>
-            <div className="fg-tool-tile">
-              <div className="fg-tool-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.2L12 16.9 6.4 20l1.4-6.2L3 9.5l6.4-.6L12 3Z" /></svg>
-              </div>
-              <div><div className="fg-t">Submit soft-skill evaluation</div><div className="fg-d">Rate communication, leadership, teamwork</div></div>
-            </div>
-            <div className="fg-tool-tile">
-              <div className="fg-tool-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none" /></svg>
-              </div>
-              <div><div className="fg-t">Audit trail</div><div className="fg-d">All edits logged and traceable</div></div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ── Edit selected student ── */}
@@ -269,6 +299,7 @@ export function AdminDashboardPage() {
           </form>
         )}
       </div>
+
     </div>
   )
 }

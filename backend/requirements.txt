@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg2-binary
+python-jose[cryptography]
+bcrypt
+python-dotenv
+python-multipart
+pandas
+scikit-learn
+redis
+pytest
+httpx
+sentry-sdk[fastapi]
+prometheus-fastapi-instrumentator

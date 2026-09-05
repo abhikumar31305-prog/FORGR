@@ -11,7 +11,16 @@ from jose import JWTError, jwt
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
+ENV = os.getenv("FORGR_ENV", "development").lower()
+
+# ════════════════════════════════════════════════════════════════
+# SECRET KEY CONFIGURATION
+# ════════════════════════════════════════════════════════════════
 SECRET_KEY = os.getenv("FORGR_SECRET_KEY", "forgr-dev-only-secret")
+if ENV == "production" and (
+    SECRET_KEY == "forgr-dev-only-secret" or len(SECRET_KEY) < 32
+):
+    raise RuntimeError("FORGR_SECRET_KEY must be a random value of at least 32 characters in production.")
 if SECRET_KEY == "forgr-dev-only-secret":
     import warnings
     warnings.warn(
@@ -19,9 +28,17 @@ if SECRET_KEY == "forgr-dev-only-secret":
         "Set the FORGR_SECRET_KEY environment variable for production deployments.",
         stacklevel=2,
     )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("FORGR_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("FORGR_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+# ════════════════════════════════════════════════════════════════
+# HTTPS & SECURITY HEADERS CONFIGURATION
+# ════════════════════════════════════════════════════════════════
+ENFORCE_HTTPS = ENV == "production"  # Enforce HTTPS in production
+SECURE_COOKIE = ENV == "production"  # Use secure cookie flag in production
+SAMESITE_COOKIE = "strict" if ENV == "production" else "lax"  # Stricter in production
 
 
 def hash_password(password: str) -> str:

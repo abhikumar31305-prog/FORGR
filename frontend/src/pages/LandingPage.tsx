@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, useInView, animate, useReducedMotion, AnimatePresence } from 'framer-motion'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { dashboardRouteForRole } from '../utils/routes'
 
@@ -123,6 +123,15 @@ export const LandingPage: React.FC = () => {
     }
   }
 
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault()
+    setMobileMenuOpen(false)
+    const element = document.getElementById(id)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index)
   }
@@ -141,18 +150,18 @@ export const LandingPage: React.FC = () => {
             </div>
             <div className="landing-brand-text">
               <span className="brand-name">FORGR</span>
-              <span className="brand-badge">AI PLATFORM</span>
+              <span className="brand-badge">STUDENT PLATFORM</span>
             </div>
           </Link>
 
           <nav className={`landing-nav-links ${mobileMenuOpen ? 'open' : ''}`}>
-            <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
-            <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)}>How It Works</a>
-            <a href="#benefits" onClick={() => setMobileMenuOpen(false)}>Benefits</a>
-            <a href="#stats" onClick={() => setMobileMenuOpen(false)}>Achievements</a>
-            <a href="#testimonials" onClick={() => setMobileMenuOpen(false)}>Testimonials</a>
-            <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
-            <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
+            <a href="#features" onClick={(e) => scrollToSection(e, 'features')}>Features</a>
+            <a href="#how-it-works" onClick={(e) => scrollToSection(e, 'how-it-works')}>How It Works</a>
+            <a href="#benefits" onClick={(e) => scrollToSection(e, 'benefits')}>Benefits</a>
+            <a href="#stats" onClick={(e) => scrollToSection(e, 'stats')}>Achievements</a>
+            <a href="#testimonials" onClick={(e) => scrollToSection(e, 'testimonials')}>Testimonials</a>
+            <a href="#pricing" onClick={(e) => scrollToSection(e, 'pricing')}>Pricing</a>
+            <a href="#faq" onClick={(e) => scrollToSection(e, 'faq')}>FAQ</a>
           </nav>
 
           <div className="landing-nav-actions">
@@ -207,34 +216,32 @@ export const LandingPage: React.FC = () => {
             >
               <motion.div className="hero-pill" variants={heroItemVariants}>
                 <span className="pill-pulse" />
-                <span className="pill-text">FORGR Engine v2.4 Active • Real-time Risk & Placement Predictor</span>
+                <span className="pill-text">Student Profiling & Placement Readiness Platform</span>
               </motion.div>
 
               <motion.h1 className="hero-title" variants={heroItemVariants}>
-                Predict Academic Risk. <br />
-                <span className="gradient-text">Forge Placement Readiness.</span>
+                Track Your Academic Progress. <br />
+                <span className="gradient-text">Build Your Placement Readiness.</span>
               </motion.h1>
 
               <motion.p className="hero-subtitle" variants={heroItemVariants}>
-                FORGR is the multi-stakeholder AI intelligence ecosystem that unifies academic performance, 
-                attendance tracking, skill benchmarking, and machine learning placement forecasts for students, 
-                faculty, parents, and recruiters.
+                FORGR brings academics, attendance, skills, projects, and placement readiness into one student profile so you can understand where you stand and what to improve next.
               </motion.p>
 
               <motion.div className="hero-ctas" variants={heroItemVariants}>
                 <button onClick={handlePortalNavigate} className="landing-btn-hero-primary">
-                  <span>{session ? 'Enter Your Dashboard' : 'Explore Platform Now'}</span>
+                  <span>{session ? 'Go to Dashboard' : 'Explore Platform Now'}</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </button>
 
-                <a href="#how-it-works" className="landing-btn-hero-secondary">
+                <a href="#how-it-works" onClick={(e) => scrollToSection(e, 'how-it-works')} className="landing-btn-hero-secondary">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" />
                     <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
                   </svg>
-                  <span>See How ML Works</span>
+                  <span>See How It Works</span>
                 </a>
               </motion.div>
 
@@ -243,14 +250,14 @@ export const LandingPage: React.FC = () => {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
-                  <span>Role-Based Security</span>
+                  <span>Role-Based Access</span>
                 </div>
                 <div className="trust-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
-                  <span>RandomForest ML Model</span>
+                  <span>Placement Analytics</span>
                 </div>
                 <div className="trust-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -275,17 +282,17 @@ export const LandingPage: React.FC = () => {
                   <div className="dot red" />
                   <div className="dot yellow" />
                   <div className="dot green" />
-                  <span className="bar-title">FORGR AI Live Intelligence Stream</span>
+                  <span className="bar-title">Student Profile Overview</span>
                 </div>
 
                 <div className="preview-metrics-grid">
                   <div className="metric-box glowing-amber">
-                    <span className="box-label">Placement Readiness Score</span>
+                    <span className="box-label">Placement Readiness</span>
                     <div className="box-val-row">
                       <span className="box-number">
-                        <AnimatedCounter to={88.4} decimals={1} suffix="%" />
+                        <AnimatedCounter to={88} suffix="%" />
                       </span>
-                      <span className="badge-tag green">Tier 1 Target</span>
+                      <span className="badge-tag green">Placement Ready</span>
                     </div>
                     <div className="progress-bar-wrap">
                       <motion.div
@@ -299,9 +306,9 @@ export const LandingPage: React.FC = () => {
                   </div>
 
                   <div className="metric-box glowing-blue">
-                    <span className="box-label">Early Academic Risk Status</span>
+                    <span className="box-label">Academic Status</span>
                     <div className="box-val-row">
-                      <span className="box-number text-teal">LOW RISK</span>
+                      <span className="box-number text-teal">On Track</span>
                       <span className="badge-tag blue">CGPA 8.42</span>
                     </div>
                     <div className="progress-bar-wrap">
@@ -318,36 +325,36 @@ export const LandingPage: React.FC = () => {
 
                 <div className="preview-live-feed">
                   <div className="feed-header">
-                    <span>Active ML Interventions</span>
-                    <span className="live-dot">● LIVE</span>
+                    <span>Recent Updates</span>
+                    <span style={{ fontSize: '11px', color: 'var(--grey)', fontWeight: 500 }}>Demo Profile</span>
                   </div>
                   <div className="feed-item">
                     <div className="feed-icon green">✓</div>
                     <div className="feed-text">
-                      <strong>LeetCode Mastery:</strong> 210 Problems solved (+15 this week).
+                      Completed 12 coding problems this week.
                     </div>
                   </div>
                   <div className="feed-item">
-                    <div className="feed-icon amber">!</div>
+                    <div className="feed-icon green">✓</div>
                     <div className="feed-text">
-                      <strong>Attendance Alert:</strong> Data Structures attendance at 78% (Threshold 75%).
+                      Attendance is currently above the required threshold (78%).
                     </div>
                   </div>
                   <div className="feed-item">
-                    <div className="feed-icon blue">⚡</div>
+                    <div className="feed-icon blue">✓</div>
                     <div className="feed-text">
-                      <strong>Recruiter Match:</strong> Profile shortlisted for Campus Tech Drive 2026.
+                      Added a new project to your portfolio.
                     </div>
                   </div>
                 </div>
 
                 <div className="preview-card-footer">
                   <span>
-                    ML Confidence Index: <AnimatedCounter to={96.8} decimals={1} suffix="%" />
+                    Semester 6 • Computer Science
                   </span>
                   <span className="status-online">
                     <span className="status-dot-pulse" />
-                    System Ready
+                    Active Enrollment
                   </span>
                 </div>
               </div>
@@ -367,9 +374,9 @@ export const LandingPage: React.FC = () => {
             variants={fadeInUp}
           >
             <span className="section-eyebrow">CORE PLATFORM CAPABILITIES</span>
-            <h2 className="section-title">End-to-End Educational & Career Intelligence</h2>
+            <h2 className="section-title">Everything You Need for Academic & Career Growth</h2>
             <p className="section-subtitle">
-              FORGR connects fragmented institutional metrics into a single predictive engine designed for action.
+              FORGR brings together academic performance, attendance, technical skills, and placement tracking into a single unified platform.
             </p>
           </motion.div>
 
@@ -386,11 +393,11 @@ export const LandingPage: React.FC = () => {
                   <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                 </svg>
               </div>
-              <h3 className="feature-title">ML Placement Readiness Engine</h3>
+              <h3 className="feature-title">Placement Readiness</h3>
               <p className="feature-desc">
-                Machine learning model evaluating aptitude, coding skill scores, resume benchmarks, and soft skills to project hiring probability.
+                Understand your current placement readiness using your academic records, coding skills, and project portfolio.
               </p>
-              <div className="feature-tag">RandomForest Classifier</div>
+              <div className="feature-tag">Career Preparation</div>
             </motion.div>
 
             <motion.div className="feature-card" variants={fadeInUp}>
@@ -401,11 +408,11 @@ export const LandingPage: React.FC = () => {
                   <line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
               </div>
-              <h3 className="feature-title">Early Academic Risk Radar</h3>
+              <h3 className="feature-title">Academic Performance Tracking</h3>
               <p className="feature-desc">
-                Automated threshold monitoring flagging attendance &lt; 75%, active backlogs, and CGPA drops before semester de-barment occurs.
+                View your semester grades, monitor backlogs, and receive timely alerts if your performance drops.
               </p>
-              <div className="feature-tag">Predictive Warning</div>
+              <div className="feature-tag">Academic Records</div>
             </motion.div>
 
             <motion.div className="feature-card" variants={fadeInUp}>
@@ -415,11 +422,11 @@ export const LandingPage: React.FC = () => {
                   <polyline points="8 6 2 12 8 18" />
                 </svg>
               </div>
-              <h3 className="feature-title">Skill Matrix & Gap Analytics</h3>
+              <h3 className="feature-title">Skill & Coding Assessment</h3>
               <p className="feature-desc">
-                Real-time tracking of technical problem solving, system design capabilities, and industry-demanded technology stack mastery.
+                Track your programming proficiency and problem solving scores, and compare them with target role requirements.
               </p>
-              <div className="feature-tag">Skill Benchmarks</div>
+              <div className="feature-tag">Skill Matrix</div>
             </motion.div>
 
             <motion.div className="feature-card" variants={fadeInUp}>
@@ -431,11 +438,11 @@ export const LandingPage: React.FC = () => {
                   <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
               </div>
-              <h3 className="feature-title">Real-Time Attendance Intelligence</h3>
+              <h3 className="feature-title">Attendance Monitoring</h3>
               <p className="feature-desc">
-                Subject-by-subject attendance analytics with instant notifications for students, faculty advisors, and parents.
+                Keep track of course attendance and stay aware of upcoming shortages before examination eligibility is impacted.
               </p>
-              <div className="feature-tag">Live Sync</div>
+              <div className="feature-tag">Course Attendance</div>
             </motion.div>
 
             <motion.div className="feature-card" variants={fadeInUp}>
@@ -447,11 +454,11 @@ export const LandingPage: React.FC = () => {
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </div>
-              <h3 className="feature-title">6 Multi-Stakeholder Portals</h3>
+              <h3 className="feature-title">Role-Based Portals</h3>
               <p className="feature-desc">
-                Role-tailored dashboards giving customized views for Students, Faculty, Admin, Placement Officers, Recruiters, and Parents.
+                Dedicated, secure views for Students, Faculty Advisors, Placement Officers, Recruiters, and Administrators.
               </p>
-              <div className="feature-tag">Role-Based Views</div>
+              <div className="feature-tag">Institutional Access</div>
             </motion.div>
 
             <motion.div className="feature-card" variants={fadeInUp}>
@@ -461,11 +468,11 @@ export const LandingPage: React.FC = () => {
                   <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                 </svg>
               </div>
-              <h3 className="feature-title">Recruiter Talent Pipeline</h3>
+              <h3 className="feature-title">Campus Recruitment Discovery</h3>
               <p className="feature-desc">
-                Direct candidate discovery for corporate campus recruiters with verified skill badges, readiness scores, and instant shortlisting.
+                Help placement coordinators and recruiters identify qualified candidates based on verified skills and performance.
               </p>
-              <div className="feature-tag">Recruitment Acceleration</div>
+              <div className="feature-tag">Talent Discovery</div>
             </motion.div>
           </motion.div>
         </div>
@@ -481,10 +488,10 @@ export const LandingPage: React.FC = () => {
             viewport={{ once: true, amount: 0.2 }}
             variants={fadeInUp}
           >
-            <span className="section-eyebrow">FOUR-STEP PREDICTIVE PIPELINE</span>
-            <h2 className="section-title">How FORGR Drives Student Success</h2>
+            <span className="section-eyebrow">HOW IT WORKS</span>
+            <h2 className="section-title">A Simple, Structured Path from Enrollment to Placement</h2>
             <p className="section-subtitle">
-              From data aggregation to corporate placement, see how our machine learning pipeline operates.
+              How FORGR connects student effort with measurable academic and career progress.
             </p>
           </motion.div>
 
@@ -498,9 +505,9 @@ export const LandingPage: React.FC = () => {
             <motion.div className="step-card" variants={fadeInUp}>
               <div className="step-number">01</div>
               <div className="step-content">
-                <h3 className="step-title">Multi-Source Data Ingestion</h3>
+                <h3 className="step-title">Build Your Profile</h3>
                 <p className="step-desc">
-                  FORGR continuously ingests academic CGPA records, attendance logs, coding platform stats, and soft skill assessments.
+                  Enter or import your academic grades, semester attendance, technical skills, and project portfolio into one place.
                 </p>
               </div>
             </motion.div>
@@ -510,9 +517,9 @@ export const LandingPage: React.FC = () => {
             <motion.div className="step-card" variants={fadeInUp}>
               <div className="step-number">02</div>
               <div className="step-content">
-                <h3 className="step-title">ML Model Processing</h3>
+                <h3 className="step-title">Evaluate Where You Stand</h3>
                 <p className="step-desc">
-                  RandomForest and Regressor algorithms evaluate 20+ features to calculate risk flags and readiness percentages.
+                  The platform evaluates your progress against academic benchmarks and placement prerequisites across disciplines.
                 </p>
               </div>
             </motion.div>
@@ -522,9 +529,9 @@ export const LandingPage: React.FC = () => {
             <motion.div className="step-card" variants={fadeInUp}>
               <div className="step-number">03</div>
               <div className="step-content">
-                <h3 className="step-title">Actionable AI Suggestions</h3>
+                <h3 className="step-title">Follow Targeted Recommendations</h3>
                 <p className="step-desc">
-                  Students and faculty receive targeted recommendations (e.g., remedial attendance requirements, coding goals).
+                  Receive practical next steps to address attendance gaps, practice key coding topics, or enhance your portfolio.
                 </p>
               </div>
             </motion.div>
@@ -534,9 +541,9 @@ export const LandingPage: React.FC = () => {
             <motion.div className="step-card" variants={fadeInUp}>
               <div className="step-number">04</div>
               <div className="step-content">
-                <h3 className="step-title">Campus Placement Matching</h3>
+                <h3 className="step-title">Prepare for Placement Drives</h3>
                 <p className="step-desc">
-                  Placement Cell and Recruiter dashboards highlight top candidates and match profiles to company criteria.
+                  Showcase a verified profile to college placement coordinators and campus recruitment teams.
                 </p>
               </div>
             </motion.div>
@@ -554,10 +561,10 @@ export const LandingPage: React.FC = () => {
             viewport={{ once: true, amount: 0.2 }}
             variants={fadeInUp}
           >
-            <span className="section-eyebrow">TAILORED VALUE PROPOSITION</span>
+            <span className="section-eyebrow">TAILORED VALUE</span>
             <h2 className="section-title">Built for Every Stakeholder in Education</h2>
             <p className="section-subtitle">
-              Choose your role to see how FORGR delivers immediate ROI across your institution.
+              Explore how FORGR helps students, faculty, placement teams, and recruiters stay aligned on student progress.
             </p>
           </motion.div>
 
@@ -604,24 +611,24 @@ export const LandingPage: React.FC = () => {
             {activeBenefitTab === 'students' && (
               <div className="benefit-tab-content">
                 <div className="benefit-info">
-                  <span className="role-tag">STUDENT ECOSYSTEM</span>
-                  <h3 className="benefit-headline">Take Ownership of Your Career Trajectory</h3>
+                  <span className="role-tag">STUDENT PORTAL</span>
+                  <h3 className="benefit-headline">Take Control of Your Academic & Career Growth</h3>
                   <ul className="benefit-list">
                     <li>
                       <span className="check">✓</span>
-                      <span>Real-time Placement Readiness score showing exact tier eligibility.</span>
+                      <span>Real-time placement readiness score showing your current standing.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Automated AI recommendations on coding problems & resume building.</span>
+                      <span>Clear recommendations on coding practice, skills, and portfolio work.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Early warnings before attendance triggers exam de-barment.</span>
+                      <span>Early warnings before low attendance affects exam eligibility.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Direct visibility into recruiter campus shortlists.</span>
+                      <span>Centralized student profile accessible for campus recruitment drives.</span>
                     </li>
                   </ul>
                 </div>
@@ -629,7 +636,7 @@ export const LandingPage: React.FC = () => {
                   <div className="stat-big">
                     <AnimatedCounter prefix="+" to={35} suffix="%" />
                   </div>
-                  <div className="stat-label">Average Increase in Student Placement Readiness within 60 Days</div>
+                  <div className="stat-label">Average improvement in placement readiness after structured skill tracking</div>
                 </div>
               </div>
             )}
@@ -638,19 +645,19 @@ export const LandingPage: React.FC = () => {
               <div className="benefit-tab-content">
                 <div className="benefit-info">
                   <span className="role-tag">FACULTY & MENTORS</span>
-                  <h3 className="benefit-headline">Proactive Academic Mentorship Made Simple</h3>
+                  <h3 className="benefit-headline">Support Students With Clear Academic Insights</h3>
                   <ul className="benefit-list">
                     <li>
                       <span className="check">✓</span>
-                      <span>Automated identification of at-risk students in your department.</span>
+                      <span>Identify at-risk students who need attendance or academic intervention.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>One-click remedial session assignment and attendance logging.</span>
+                      <span>Assign and record remedial sessions with transparent progress logging.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Batch analytics on subject pass rates and skill distribution.</span>
+                      <span>View department-wide performance distributions across subjects and semesters.</span>
                     </li>
                   </ul>
                 </div>
@@ -658,7 +665,7 @@ export const LandingPage: React.FC = () => {
                   <div className="stat-big">
                     <AnimatedCounter to={70} suffix="%" />
                   </div>
-                  <div className="stat-label">Reduction in Administrative Monitoring Hours for Faculty</div>
+                  <div className="stat-label">Less time spent compiling manual attendance and marks spreadsheets</div>
                 </div>
               </div>
             )}
@@ -667,27 +674,27 @@ export const LandingPage: React.FC = () => {
               <div className="benefit-tab-content">
                 <div className="benefit-info">
                   <span className="role-tag">PLACEMENT OFFICERS</span>
-                  <h3 className="benefit-headline">Maximize On-Campus Hiring Rates & Packages</h3>
+                  <h3 className="benefit-headline">Organize and Accelerate Campus Placement Drives</h3>
                   <ul className="benefit-list">
                     <li>
                       <span className="check">✓</span>
-                      <span>Comprehensive batch readiness heatmaps across engineering branches.</span>
+                      <span>Batch-wide readiness overviews across engineering branches.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Instant candidate filtering based on company-specific cutoffs.</span>
+                      <span>Filter eligible students instantly based on company cutoffs and skills.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Automated job drive management and applicant tracking.</span>
+                      <span>Track ongoing recruitment drives and applicant status in one dashboard.</span>
                     </li>
                   </ul>
                 </div>
                 <div className="benefit-stat-box">
                   <div className="stat-big">
-                    <AnimatedCounter to={98.4} decimals={1} suffix="%" />
+                    <AnimatedCounter to={95} suffix="%" />
                   </div>
-                  <div className="stat-label">Accuracy in Company Eligibility & Candidate Matching</div>
+                  <div className="stat-label">Faster candidate shortlisting based on verified eligibility criteria</div>
                 </div>
               </div>
             )}
@@ -696,19 +703,19 @@ export const LandingPage: React.FC = () => {
               <div className="benefit-tab-content">
                 <div className="benefit-info">
                   <span className="role-tag">RECRUITMENT TEAMS</span>
-                  <h3 className="benefit-headline">Hire Top Verified Talent Faster</h3>
+                  <h3 className="benefit-headline">Find Verified Candidates Matching Your Requirements</h3>
                   <ul className="benefit-list">
                     <li>
                       <span className="check">✓</span>
-                      <span>Access pre-verified candidate profiles with objective ML scores.</span>
+                      <span>Review student profiles with transparent academic and coding histories.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Filter candidates by coding score, CGPA, and specific skill badges.</span>
+                      <span>Filter candidates by coding score, CGPA, and specific technologies.</span>
                     </li>
                     <li>
                       <span className="check">✓</span>
-                      <span>Direct campus interview scheduling and shortlist management.</span>
+                      <span>Faster campus drive shortlisting with consistent, structured student data.</span>
                     </li>
                   </ul>
                 </div>
@@ -716,7 +723,7 @@ export const LandingPage: React.FC = () => {
                   <div className="stat-big">
                     <AnimatedCounter to={3} suffix="x" />
                   </div>
-                  <div className="stat-label">Faster Time-to-Hire for Technical Campus Drives</div>
+                  <div className="stat-label">Faster time-to-shortlist during on-campus hiring drives</div>
                 </div>
               </div>
             )}
@@ -736,32 +743,32 @@ export const LandingPage: React.FC = () => {
           >
             <motion.div className="stat-card glowing-border" variants={fadeInUp}>
               <div className="stat-number">
-                <AnimatedCounter to={98.4} decimals={1} suffix="%" />
+                <AnimatedCounter to={5000} suffix="+" />
               </div>
-              <div className="stat-title">ML Prediction Accuracy</div>
-              <div className="stat-sub">High precision model trained on 50,000+ academic & placement records.</div>
+              <div className="stat-title">Benchmark Students Supported</div>
+              <div className="stat-sub">Comprehensive multi-domain dataset indexing academics, attendance, and skills.</div>
             </motion.div>
 
             <motion.div className="stat-card glowing-border" variants={fadeInUp}>
               <div className="stat-number">
-                <AnimatedCounter to={45} suffix="%" />
+                <AnimatedCounter to={6} suffix="" />
               </div>
-              <div className="stat-title">Placement Rate Boost</div>
-              <div className="stat-sub">Average increase in tier-1 tech placements across partner campuses.</div>
+              <div className="stat-title">Role-Based Portals</div>
+              <div className="stat-sub">Unified access for students, faculty, admin, placement cell, recruiters, and parents.</div>
             </motion.div>
 
             <motion.div className="stat-card glowing-border" variants={fadeInUp}>
               <div className="stat-number">
-                <AnimatedCounter to={10000} suffix="+" />
+                <AnimatedCounter to={52} suffix="+" />
               </div>
-              <div className="stat-title">Active Student Profiles</div>
-              <div className="stat-sub">Tracked in real time for academic risk & skill benchmarks.</div>
+              <div className="stat-title">Parameters Evaluated</div>
+              <div className="stat-sub">Holistic profiling across coursework, coding problem solving, and project portfolios.</div>
             </motion.div>
 
             <motion.div className="stat-card glowing-border" variants={fadeInUp}>
               <div className="stat-number">&lt; 24 hrs</div>
-              <div className="stat-title">Risk Detection Window</div>
-              <div className="stat-sub">Early warning alert generation prior to examination cutoffs.</div>
+              <div className="stat-title">Early Alert Generation</div>
+              <div className="stat-sub">Timely warnings before attendance shortages or backlog thresholds are breached.</div>
             </motion.div>
           </motion.div>
         </div>
@@ -777,10 +784,10 @@ export const LandingPage: React.FC = () => {
             viewport={{ once: true, amount: 0.2 }}
             variants={fadeInUp}
           >
-            <span className="section-eyebrow">TRUSTED BY INSTITUTIONS & RECRUITERS</span>
-            <h2 className="section-title">What Leaders Say About FORGR</h2>
+            <span className="section-eyebrow">CAMPUS PERSPECTIVES</span>
+            <h2 className="section-title">Feedback from Campus Users</h2>
             <p className="section-subtitle">
-              Discover how universities and hiring partners transform outcomes using FORGR.
+              How students, faculty, and placement coordinators use FORGR in everyday campus workflows.
             </p>
           </motion.div>
 
@@ -794,13 +801,13 @@ export const LandingPage: React.FC = () => {
             <motion.div className="testimonial-card" variants={fadeInUp}>
               <div className="stars">★★★★★</div>
               <p className="quote">
-                "FORGR completely eliminated our manual placement eligibility tracking. The machine learning readiness score predicted our top candidates with uncanny precision."
+                "FORGR streamlined our campus placement workflows. Being able to filter students by verified coding scores, CGPA, and project history in seconds saved our team weeks of manual spreadsheet work."
               </p>
               <div className="author-row">
                 <div className="author-avatar ember">DR</div>
                 <div className="author-meta">
                   <div className="author-name">Dr. R. K. Sharma</div>
-                  <div className="author-role">Dean of Placements & Training, SIT</div>
+                  <div className="author-role">Dean of Placements & Training</div>
                 </div>
               </div>
             </motion.div>
@@ -808,13 +815,13 @@ export const LandingPage: React.FC = () => {
             <motion.div className="testimonial-card" variants={fadeInUp}>
               <div className="stars">★★★★★</div>
               <p className="quote">
-                "As a student, having clear AI suggestions on what to improve—whether LeetCode problems or aptitude tests—helped me secure my dream package at a Tier-1 Tech firm."
+                "Having all my attendance, grades, and coding milestones in one dashboard made it clear what to focus on each semester. The placement readiness score gave me a concrete target to work toward."
               </p>
               <div className="author-row">
                 <div className="author-avatar blue">AV</div>
                 <div className="author-meta">
                   <div className="author-name">Ananya Verma</div>
-                  <div className="author-role">Final Year CS Student (Placed @ $28k)</div>
+                  <div className="author-role">Final Year CS Student</div>
                 </div>
               </div>
             </motion.div>
@@ -822,7 +829,7 @@ export const LandingPage: React.FC = () => {
             <motion.div className="testimonial-card" variants={fadeInUp}>
               <div className="stars">★★★★★</div>
               <p className="quote">
-                "The Early Academic Risk Radar allowed our department to intervene 2 months before exams. Attendance de-barments dropped by 80% this semester."
+                "The attendance and backlog alerts gave our faculty advisors early visibility into struggling students before exam schedules. It made student mentorship much more proactive and effective."
               </p>
               <div className="author-row">
                 <div className="author-avatar green">MN</div>
@@ -846,10 +853,10 @@ export const LandingPage: React.FC = () => {
             viewport={{ once: true, amount: 0.2 }}
             variants={fadeInUp}
           >
-            <span className="section-eyebrow">PAY-PER-STUDENT BILLING</span>
-            <h2 className="section-title">Pay Only For Active Student Profiles You Manage</h2>
+            <span className="section-eyebrow">CAMPUS LICENSING</span>
+            <h2 className="section-title">Simple, Transparent Per-Student Pricing</h2>
             <p className="section-subtitle">
-              Transparent per-student pricing tailored to your institution. Scale seamlessly from 50 to 50,000+ student profiles.
+              Predictable pricing based on the active student profiles your institution manages. Scale from departmental pilots to university-wide adoption.
             </p>
 
             <div className="pricing-toggle-wrap">
@@ -877,10 +884,10 @@ export const LandingPage: React.FC = () => {
           >
             <div className="pricing-calc-header">
               <h3 className="pricing-calc-title">
-                Calculate Your Custom Campus Cost
+                Estimate Your Institution's Plan
               </h3>
               <p className="pricing-calc-desc">
-                Drag the slider or enter the total number of student profiles managed in this project:
+                Adjust the slider or enter the total number of student profiles managed in your institution:
               </p>
             </div>
 
@@ -943,7 +950,7 @@ export const LandingPage: React.FC = () => {
                       ${effectiveRate.toFixed(2)} <span className="pricing-breakdown-sub">/ profile / mo</span>
                     </div>
                     <div className="pricing-breakdown-tag">
-                      {managedStudents <= 500 ? 'Starter tier' : managedStudents <= 2500 ? 'Growth volume discount' : 'Enterprise maximum discount'}
+                      {managedStudents <= 500 ? 'Departmental pilot' : managedStudents <= 2500 ? 'Campus volume discount' : 'University enterprise tier'}
                     </div>
                   </div>
 
@@ -963,13 +970,13 @@ export const LandingPage: React.FC = () => {
                       className="landing-btn-hero-primary"
                       style={{ width: '100%', justifyContent: 'center', padding: '1rem 1.5rem' }}
                     >
-                      <span>Start Managed Plan</span>
+                      <span>Explore Institutional Access</span>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M5 12h14M12 5l7 7-7 7" />
                       </svg>
                     </button>
                     <div className="pricing-btn-subnote">
-                      Includes all 6 portals, ML risk model & PDF reports
+                      Includes all 6 role portals, attendance tracking, skill assessments, and placement reports
                     </div>
                   </div>
                 </div>
@@ -992,7 +999,7 @@ export const LandingPage: React.FC = () => {
             <span className="section-eyebrow">FREQUENTLY ASKED QUESTIONS</span>
             <h2 className="section-title">Everything You Need to Know</h2>
             <p className="section-subtitle">
-              Got questions about FORGR's AI engine or deployment? We've got answers.
+              Common questions about FORGR features, institutional data, and student privacy.
             </p>
           </motion.div>
 
@@ -1005,24 +1012,24 @@ export const LandingPage: React.FC = () => {
           >
             {[
               {
-                q: "How does FORGR calculate Placement Readiness Score?",
-                a: "FORGR uses a trained RandomForest Regression and Classification pipeline that combines weighted inputs including semester CGPA, LeetCode/coding problem solving scores, aptitude test performance, resume verification ratings, and soft skill evaluations."
+                q: "How is Placement Readiness calculated?",
+                a: "FORGR evaluates a combination of academic CGPA, coding assessment proficiency, project portfolio quality, aptitude practice, and communication readiness against standard campus hiring criteria."
               },
               {
-                q: "Can FORGR integrate with our existing University ERP or Attendance System?",
-                a: "Yes. FORGR provides RESTful API endpoints and CSV batch import scripts to seamlessly synchronize attendance records, exam grades, and student rosters with existing institutional ERP systems."
+                q: "Can FORGR work with our university's existing attendance and exam data?",
+                a: "Yes. FORGR provides bulk CSV import tools and REST API endpoints to easily ingest attendance sheets, semester marks, and student rosters from existing institutional campus systems."
               },
               {
-                q: "What triggers an Early Academic Risk alert?",
-                a: "Risk alerts trigger automatically when a student's attendance drops below 75%, active backlogs exceed 0, or semester CGPA falls below 6.5. Automated notifications are dispatched to students, faculty advisors, and linked parent accounts."
+                q: "How do early academic alerts work?",
+                a: "When a student's attendance falls below the institutional threshold (such as 75%) or backlogs are detected, FORGR flags the student on faculty and student dashboards so early remedial action can be taken."
               },
               {
-                q: "How are security and role permissions managed?",
-                a: "FORGR enforces granular Role-Based Access Control (RBAC) across 6 distinct user roles (Student, Faculty, Admin, Placement Cell, Recruiter, and Parent). Data is encrypted in transit and at rest."
+                q: "Who can access student records?",
+                a: "FORGR uses role-based access control. Students only view their own profile, faculty view their assigned classes, and administrators manage institutional records securely."
               },
               {
-                q: "How fast can an institution deploy FORGR?",
-                a: "Initial setup takes less than 24 hours. Once student and course databases are imported, the ML model generates readiness baselines immediately."
+                q: "How can students update their profile and skills?",
+                a: "Students can log in to update their project highlights, portfolio links, coding practice progress, and view verified academic metrics provided by the institution."
               }
             ].map((faq, idx) => (
               <motion.div key={idx} className={`faq-item ${activeFaq === idx ? 'open' : ''}`} variants={fadeInUp}>
@@ -1064,14 +1071,14 @@ export const LandingPage: React.FC = () => {
           >
             <div className="cta-content">
               <h2 className="cta-title">
-                Ready to Forge Higher Placement Rates & Zero Academic Risk?
+                Start Managing Student Success & Placement Readiness
               </h2>
               <p className="cta-desc">
-                Join forward-thinking universities and engineering institutions using FORGR to empower students and streamline campus recruitment.
+                Empower students to understand where they stand, identify skill gaps early, and give faculty the tools to intervene effectively.
               </p>
               <div className="cta-actions">
                 <button onClick={handlePortalNavigate} className="landing-btn-hero-primary">
-                  <span>Get Started Instantly</span>
+                  <span>{session ? 'Go to Dashboard' : 'Explore Platform Now'}</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
@@ -1080,7 +1087,7 @@ export const LandingPage: React.FC = () => {
                   <span>Sign In to Existing Account</span>
                 </Link>
               </div>
-              <div className="cta-note">No credit card required for demo access • Instant setup</div>
+              <div className="cta-note">Instant role-based demonstration access • No credit card required</div>
             </div>
           </motion.div>
         </div>
@@ -1107,20 +1114,20 @@ export const LandingPage: React.FC = () => {
                 <span className="brand-name">FORGR</span>
               </div>
               <p className="footer-tagline">
-                Next-Generation AI Educational Growth & Campus Placement Readiness Platform.
+                Student profiling, academic monitoring, and placement readiness platform.
               </p>
               <div className="system-status">
                 <span className="status-dot green" />
-                <span>All FORGR Core & ML Services Operational</span>
+                <span>All Core Services Operational</span>
               </div>
             </div>
 
             <div className="footer-links-col">
               <h4 className="footer-heading">Platform</h4>
-              <a href="#features">ML Predictor</a>
-              <a href="#features">Risk Radar</a>
-              <a href="#features">Skill Matrix</a>
-              <a href="#how-it-works">How It Works</a>
+              <a href="#features" onClick={(e) => scrollToSection(e, 'features')}>Placement Readiness</a>
+              <a href="#features" onClick={(e) => scrollToSection(e, 'features')}>Academic Tracking</a>
+              <a href="#features" onClick={(e) => scrollToSection(e, 'features')}>Skill Matrix</a>
+              <a href="#how-it-works" onClick={(e) => scrollToSection(e, 'how-it-works')}>How It Works</a>
             </div>
 
             <div className="footer-links-col">
@@ -1134,17 +1141,17 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="footer-links-col">
-              <h4 className="footer-heading">Resources & Legal</h4>
-              <a href="#faq">Documentation</a>
-              <a href="#faq">API Reference</a>
-              <a href="#faq">Privacy Policy</a>
-              <a href="#faq">Terms of Service</a>
+              <h4 className="footer-heading">Overview</h4>
+              <a href="#benefits" onClick={(e) => scrollToSection(e, 'benefits')}>Benefits</a>
+              <a href="#stats" onClick={(e) => scrollToSection(e, 'stats')}>Achievements</a>
+              <a href="#pricing" onClick={(e) => scrollToSection(e, 'pricing')}>Pricing</a>
+              <a href="#faq" onClick={(e) => scrollToSection(e, 'faq')}>FAQ</a>
             </div>
           </div>
 
           <div className="footer-bottom">
             <div className="copyright">
-              © {new Date().getFullYear()} FORGR Platform Inc. All rights reserved. Powered by Advanced ML & Educational Intelligence.
+              © {new Date().getFullYear()} FORGR Platform. All rights reserved. Student profiling & placement intelligence.
             </div>
           </div>
         </div>
@@ -1152,3 +1159,5 @@ export const LandingPage: React.FC = () => {
     </div>
   )
 }
+
+export default LandingPage

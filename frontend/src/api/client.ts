@@ -1,10 +1,28 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const CONFIGURED_API_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+const SESSION_STORAGE_KEY = 'forgr_user_session'
 
 let accessToken = ''
 let unauthorizedHandler: (() => void) | null = null
 
 export function setAccessToken(token: string | null) {
   accessToken = token ?? ''
+}
+
+export function getEffectiveAccessToken(): string {
+  if (accessToken) return accessToken
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed?.accessToken) {
+        accessToken = parsed.accessToken
+        return accessToken
+      }
+    }
+  } catch {
+    return ''
+  }
+  return ''
 }
 
 export function setUnauthorizedHandler(handler: (() => void) | null) {
@@ -36,14 +54,48 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, authen
 
   headers.set('Accept', 'application/json')
 
-  if (authenticated && accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`)
+  if (authenticated) {
+    const token = getEffectiveAccessToken()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    } else {
+      unauthorizedHandler?.()
+      throw new Error('Authentication required. Please sign in.')
+    }
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  })
+  // Determine candidate URLs for resilience (Vite proxy -> configured URL -> 127.0.0.1:8000 -> localhost:8000)
+  const candidateUrls: string[] = [path]
+  if (CONFIGURED_API_URL && !candidateUrls.includes(`${CONFIGURED_API_URL}${path}`)) {
+    candidateUrls.push(`${CONFIGURED_API_URL}${path}`)
+  }
+  if (!candidateUrls.includes(`http://127.0.0.1:8000${path}`)) {
+    candidateUrls.push(`http://127.0.0.1:8000${path}`)
+  }
+  if (!candidateUrls.includes(`http://localhost:8000${path}`)) {
+    candidateUrls.push(`http://localhost:8000${path}`)
+  }
+
+  let lastError: unknown = null
+  let response: Response | null = null
+
+  for (const url of candidateUrls) {
+    try {
+      response = await fetch(url, {
+        ...init,
+        headers,
+      })
+      break
+    } catch (err) {
+      lastError = err
+    }
+  }
+
+  if (!response) {
+    throw new Error(
+      `Unable to connect to backend server. Ensure backend is running at http://127.0.0.1:8000 (${lastError instanceof Error ? lastError.message : 'Network error'})`
+    )
+  }
 
   if (response.status === 401) {
     unauthorizedHandler?.()

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { getPlacement, updatePlacement } from '../../services/featureApi'
 import type { PlacementRecord } from '../../types/domain'
 

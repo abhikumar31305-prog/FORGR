@@ -73,6 +73,15 @@ export async function updateStudentProfile(
   return toStudentProfile(data)
 }
 
+export async function uploadStudentResume(studentId: string, file: File): Promise<{ resume_link: string; file_name: string; size: number }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiRequest(`/students/${studentId}/resume`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export async function getStudentReportCard(studentId: string): Promise<StudentProfile> {
   const data = await apiRequest<BackendStudentProfile>(`/students/${studentId}/report-card`)
   return toStudentProfile(data)

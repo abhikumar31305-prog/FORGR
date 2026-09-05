@@ -1,0 +1,195 @@
+---
+# Backend API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forgr-backend
+  namespace: forgr
+  labels:
+    app: forgr-backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: forgr-backend
+  template:
+    metadata:
+      labels:
+        app: forgr-backend
+    spec:
+      serviceAccountName: forgr-backend
+      containers:
+      - name: backend
+        image: forgr-backend:1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: api
+        envFrom:
+        - configMapRef:
+            name: forgr-config
+        - secretRef:
+            name: forgr-secrets
+        env:
+        - name: FORGR_RUN_MIGRATIONS
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      initContainers:
+      - name: db-migration
+        image: forgr-backend:1.0.0
+        command:
+          - sh
+          - -c
+          - alembic upgrade head || true
+        envFrom:
+        - configMapRef:
+            name: forgr-config
+        - secretRef:
+            name: forgr-secrets
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: uploads
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - forgr-backend
+              topologyKey: kubernetes.io/hostname
+
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgr-backend
+  namespace: forgr
+  labels:
+    app: forgr-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: api
+  selector:
+    app: forgr-backend
+
+---
+# Backend ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forgr-backend
+  namespace: forgr
+
+---
+# Backend Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forgr-backend
+  namespace: forgr
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+# Backend RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forgr-backend
+  namespace: forgr
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forgr-backend
+subjects:
+- kind: ServiceAccount
+  name: forgr-backend
+  namespace: forgr
+
+---
+# Backend Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: forgr-backend-hpa
+  namespace: forgr
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: forgr-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

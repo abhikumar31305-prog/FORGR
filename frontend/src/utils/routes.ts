@@ -1,12 +1,12 @@
 import type { Role } from '../types/auth'
 
 const dashboardRoutes: Record<Role, string> = {
-  student: '/dashboard/student',
-  faculty: '/dashboard/faculty',
-  placement_cell: '/dashboard/placement',
-  parent: '/dashboard/parent',
-  recruiter: '/dashboard/recruiter',
-  admin: '/dashboard/admin',
+  student: '/student',
+  faculty: '/faculty',
+  placement_cell: '/placement',
+  parent: '/parent',
+  recruiter: '/recruiter',
+  admin: '/admin',
 }
 
 export function dashboardRouteForRole(role: Role) {

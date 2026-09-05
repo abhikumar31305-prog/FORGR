@@ -107,6 +107,11 @@ class RiskPrediction(Base):
     placement_risk: Mapped[str] = mapped_column(String(10), default="Low")
     overall_risk: Mapped[str] = mapped_column(String(10), default="Low")
     ai_suggestion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ML model versioning fields
+    model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    predicted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class StudentProfile(Base):
@@ -128,6 +133,24 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class AuthToken(Base):
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class LoginAuditLog(Base):
     __tablename__ = "login_audit_log"
 
@@ -146,8 +169,106 @@ class EditAuditLog(Base):
     table_name: Mapped[str] = mapped_column(String(64), nullable=False)
     student_id: Mapped[str | None] = mapped_column(String, nullable=True)
     user_email: Mapped[str] = mapped_column(String, nullable=False)
-    action: Mapped[str] = mapped_column(String(16), nullable=False)  # 'create', 'update', 'delete'
+    action: Mapped[str] = mapped_column(String(16), nullable=False)  # 'create', 'update', 'delete', 'import'
     field_changed: Mapped[str | None] = mapped_column(String, nullable=True)
     old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ImportHistory(Base):
+    __tablename__ = "import_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    import_batch_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    admin_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    dataset_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    import_mode: Mapped[str] = mapped_column(String(32), nullable=False)  # 'create', 'update', 'upsert', 'replace'
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    total_rows: Mapped[int] = mapped_column(Integer, default=0)
+    inserted_rows: Mapped[int] = mapped_column(Integer, default=0)
+    updated_rows: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_rows: Mapped[int] = mapped_column(Integer, default=0)
+    failed_rows: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="Completed")  # 'Validating', 'Processing', 'Completed', 'Completed with warnings', 'Failed', 'Rolled back'
+    error_log_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ── ML Model Registry ───────────────────────────────────────────────
+
+
+class ModelRegistry(Base):
+    __tablename__ = "model_registry"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    model_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # 'backlog_risk', 'placement', 'employability', 'career'
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    metrics_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # {"accuracy": 0.92, "f1": 0.89, ...}
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    promoted_by: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+# ── ML Monitoring ────────────────────────────────────────────────────
+
+
+class PredictionLog(Base):
+    __tablename__ = "prediction_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    student_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    model_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    prediction: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    input_features_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class DriftReport(Base):
+    __tablename__ = "drift_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    model_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    psi_score: Mapped[float] = mapped_column(Float, nullable=False)
+    feature_drifts_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_drifted: Mapped[bool] = mapped_column(Boolean, default=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ── Compliance ───────────────────────────────────────────────────────
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    actor_email: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # 'role_change', 'data_export', 'record_update', 'record_delete', 'bulk_import', 'model_promotion', 'consent_change'
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class ConsentRecord(Base):
+    __tablename__ = "consent_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    consent_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # 'data_processing', 'analytics', 'marketing', 'third_party_sharing'
+    granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    policy_version: Mapped[str] = mapped_column(String(16), default="1.0", nullable=False)

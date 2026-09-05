@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import crud
 import models
-from auth import get_db, require_role
+from auth import check_student_access, get_db, get_current_user, require_role
 from ml.backlog.predict import predict_backlog_risk
 
 router = APIRouter(prefix="/api/backlog", tags=["Student Risk Prediction"])
@@ -46,8 +46,9 @@ def predict_backlog(payload: BacklogPredictionRequest):
 def get_student_backlog_risk(
     student_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("student", "faculty", "placement_cell", "parent", "admin")),
+    current_user: models.User = Depends(require_role("student", "faculty", "placement_cell", "parent", "admin")),
 ):
+    check_student_access(current_user, student_id, db)
     """
     Fetch student database metrics across academics, attendance, skills, and portfolio,
     and predict Student Risk Category.

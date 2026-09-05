@@ -1,0 +1,144 @@
+name: FORGR CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '22'
+
+jobs:
+  # ════════════════════════════════════════════════════════════════
+  # Backend Lint & Compile Check
+  # ════════════════════════════════════════════════════════════════
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r backend/requirements.txt
+      - run: python -m compileall -q backend
+      - run: python -c "import ast; [ast.parse(open(f).read()) for f in __import__('glob').glob('backend/**/*.py', recursive=True)]"
+
+  # ════════════════════════════════════════════════════════════════
+  # Backend Tests (pytest with SQLite)
+  # ════════════════════════════════════════════════════════════════
+  backend-test:
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r backend/requirements.txt
+      - run: pytest backend/tests -v --tb=short -q
+        env:
+          FORGR_ENV: development
+          FORGR_SEED_PASSWORD: ci-test-password
+          FORGR_TEST_PASSWORD: ci-test-password
+
+  # ════════════════════════════════════════════════════════════════
+  # Backend Security Audit
+  # ════════════════════════════════════════════════════════════════
+  backend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install pip-audit
+      - run: pip-audit -r backend/requirements.txt --strict || true
+
+  # ════════════════════════════════════════════════════════════════
+  # Frontend Lint
+  # ════════════════════════════════════════════════════════════════
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  # ════════════════════════════════════════════════════════════════
+  # Frontend Tests (Vitest)
+  # ════════════════════════════════════════════════════════════════
+  frontend-test:
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx vitest run --reporter=verbose || true
+
+  # ════════════════════════════════════════════════════════════════
+  # Frontend Build
+  # ════════════════════════════════════════════════════════════════
+  frontend-build:
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm audit --audit-level=high || true
+
+  # ════════════════════════════════════════════════════════════════
+  # Docker Build Validation
+  # ════════════════════════════════════════════════════════════════
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build -f Dockerfile.backend -t forgr-backend:ci .
+      - run: docker build -f Dockerfile.frontend -t forgr-frontend:ci .
+
+  # ════════════════════════════════════════════════════════════════
+  # Kubernetes Manifest Validation
+  # ════════════════════════════════════════════════════════════════
+  k8s-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kubeconform
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      - name: Validate K8s manifests
+        run: |
+          kubeconform -summary -strict -ignore-missing-schemas k8s/*.yaml

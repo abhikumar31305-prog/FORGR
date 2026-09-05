@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { SectionCard } from '../../components/ui/SectionCard'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 
 export function SettingsPage() {
   const { session, logout } = useAuth()

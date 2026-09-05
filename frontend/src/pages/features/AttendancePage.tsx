@@ -14,7 +14,7 @@ import {
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { getAttendance, updateAttendance } from '../../services/featureApi'
 import type { AttendanceRecord } from '../../types/domain'
 

@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/layout/AppLayout'
-import { useAuth } from './context/AuthContext'
+import { useAuth } from './context/useAuth'
 import { dashboardRouteForRole } from './utils/routes'
 
 const LandingPage = lazy(() =>
@@ -27,6 +27,21 @@ const StudentDashboardPage = lazy(() =>
 const AdminDashboardPage = lazy(() =>
   import('./pages/admin/AdminDashboardPage').then((module) => ({
     default: module.AdminDashboardPage,
+  })),
+)
+const AdminBulkImportPage = lazy(() =>
+  import('./pages/admin/AdminBulkImportPage').then((module) => ({
+    default: module.AdminBulkImportPage,
+  })),
+)
+const AdminImportHistoryPage = lazy(() =>
+  import('./pages/admin/AdminImportHistoryPage').then((module) => ({
+    default: module.AdminImportHistoryPage,
+  })),
+)
+const AdminAuditLogsPage = lazy(() =>
+  import('./pages/admin/AdminAuditLogsPage').then((module) => ({
+    default: module.AdminAuditLogsPage,
   })),
 )
 const ParentDashboardPage = lazy(() =>
@@ -74,7 +89,7 @@ function HomeRedirect() {
   const { session } = useAuth()
 
   if (!session) {
-    return <LandingPage />
+    return <Navigate to="/login" replace />
   }
 
   return <Navigate to={dashboardRouteForRole(session.role)} replace />
@@ -87,15 +102,15 @@ function App() {
   return (
     <Suspense fallback={<div className="loading page">Loading page...</div>}>
       <Routes>
-        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/dashboard" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Dashboard Role Routes */}
+        {/* Canonical Role Routes */}
         <Route
-          path="/dashboard/student"
+          path="/student"
           element={
             <ProtectedRoute allowedRoles={['student']}>
               <AppLayout>
@@ -106,7 +121,7 @@ function App() {
         />
 
         <Route
-          path="/dashboard/admin"
+          path="/admin"
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AppLayout>
@@ -117,7 +132,40 @@ function App() {
         />
 
         <Route
-          path="/dashboard/parent"
+          path="/admin/bulk-import"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AppLayout>
+                <AdminBulkImportPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/import-history"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AppLayout>
+                <AdminImportHistoryPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AppLayout>
+                <AdminAuditLogsPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/parent"
           element={
             <ProtectedRoute allowedRoles={['parent']}>
               <AppLayout>
@@ -128,7 +176,7 @@ function App() {
         />
 
         <Route
-          path="/dashboard/faculty"
+          path="/faculty"
           element={
             <ProtectedRoute allowedRoles={['faculty']}>
               <AppLayout>
@@ -139,7 +187,7 @@ function App() {
         />
 
         <Route
-          path="/dashboard/placement"
+          path="/placement"
           element={
             <ProtectedRoute allowedRoles={['placement_cell']}>
               <AppLayout>
@@ -150,7 +198,7 @@ function App() {
         />
 
         <Route
-          path="/dashboard/recruiter"
+          path="/recruiter"
           element={
             <ProtectedRoute allowedRoles={['recruiter']}>
               <AppLayout>
@@ -227,13 +275,13 @@ function App() {
           }
         />
 
-        {/* Short redirects */}
-        <Route path="/student" element={<Navigate to="/dashboard/student" replace />} />
-        <Route path="/admin" element={<Navigate to="/dashboard/admin" replace />} />
-        <Route path="/parent" element={<Navigate to="/dashboard/parent" replace />} />
-        <Route path="/faculty" element={<Navigate to="/dashboard/faculty" replace />} />
-        <Route path="/placement" element={<Navigate to="/dashboard/placement" replace />} />
-        <Route path="/recruiter" element={<Navigate to="/dashboard/recruiter" replace />} />
+        {/* Backward-compatibility /dashboard/* redirects */}
+        <Route path="/dashboard/student" element={<Navigate to="/student" replace />} />
+        <Route path="/dashboard/admin" element={<Navigate to="/admin" replace />} />
+        <Route path="/dashboard/parent" element={<Navigate to="/parent" replace />} />
+        <Route path="/dashboard/faculty" element={<Navigate to="/faculty" replace />} />
+        <Route path="/dashboard/placement" element={<Navigate to="/placement" replace />} />
+        <Route path="/dashboard/recruiter" element={<Navigate to="/recruiter" replace />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

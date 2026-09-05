@@ -98,6 +98,7 @@ export interface StudentDashboardData {
   academicsTrend: AcademicRecord[]
   skills: SkillPoint[]
   portfolio?: PortfolioRecord | null
+  codingScore?: number
 }
 
 export interface RiskDistributionItem {
@@ -121,6 +122,9 @@ export interface AdminDashboardData {
   highRiskStudents: number
   lowAttendanceStudents: number
   placementReadyStudents: number
+  avgEmployability?: number
+  avgAttendance?: number
+  avgCgpa?: number
   riskDistribution: RiskDistributionItem[]
   alerts: string[]
   studentRows: StudentTableRow[]

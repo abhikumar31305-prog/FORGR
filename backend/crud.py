@@ -1,5 +1,9 @@
 import copy
 import json
+import os
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 from collections import Counter
 
 from sqlalchemy import func as sa_func
@@ -71,7 +75,7 @@ def create_student(db: Session, student: schemas.StudentCreate):
     db.refresh(db_student)
     return db_student
 
-def get_students(db: Session, branch: str | None = None, year: int | None = None, risk: str | None = None):
+def get_students(db: Session, branch: str | None = None, year: int | None = None, risk: str | None = None, offset: int = 0, limit: int = 50):
     query = db.query(models.Student)
 
     if branch:
@@ -88,7 +92,7 @@ def get_students(db: Session, branch: str | None = None, year: int | None = None
         }
         students = [s for s in students if risk_map.get(str(s.student_id), "Low") == risk]
 
-    return students
+    return students[offset:offset + limit]
 
 
 # ── User / Auth helpers ──────────────────────────────────────────────
@@ -103,6 +107,8 @@ def get_user_by_id(db: Session, user_id: int):
 
 
 def create_user(db: Session, payload: schemas.RegisterRequest) -> models.User:
+    if payload.role in ("admin", "student"):
+        raise ValueError("This role cannot be selected during account registration.")
     if get_user_by_email(db, payload.email) is not None:
         raise ValueError("A user with that email already exists.")
 
@@ -135,7 +141,7 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
             if user is None:
                 user = models.User(
                     email=student.email.strip().lower(),
-                    password_hash=hash_password(payload.password if payload.password else "demo123"),
+                    password_hash=hash_password(payload.password),
                     role=models.UserRole.STUDENT,
                     linked_profile_id=student.id,
                 )
@@ -157,7 +163,7 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
                     if user is None:
                         user = models.User(
                             email=user_email,
-                            password_hash=hash_password(payload.password if payload.password else "demo123"),
+                            password_hash=hash_password(payload.password),
                             role=models.UserRole.PARENT,
                             linked_profile_id=student.id,
                         )
@@ -169,12 +175,59 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
     if user is None:
         raise LookupError(f"No account or student profile found matching '{input_str}'.")
 
+    recent_failures = db.query(models.LoginAuditLog).filter(
+        models.LoginAuditLog.email == input_str.lower(),
+        models.LoginAuditLog.success.is_(False),
+        models.LoginAuditLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=15),
+    ).count()
+    if recent_failures >= 5:
+        raise ValueError("Account temporarily locked after repeated failed sign-in attempts. Try again in 15 minutes.")
+
     if not verify_password(payload.password, user.password_hash):
-        if payload.password in ("demo123", "demo"):
-            return user
         raise ValueError("Invalid email or password.")
 
     return user
+
+
+def create_auth_token(db: Session, user: models.User, purpose: str, hours: int = 1) -> str:
+    raw_token = secrets.token_urlsafe(32)
+    db.add(models.AuthToken(
+        user_id=user.id,
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
+        purpose=purpose,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=hours),
+    ))
+    db.commit()
+    return raw_token
+
+
+def consume_auth_token(db: Session, raw_token: str, purpose: str) -> models.User:
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token = db.query(models.AuthToken).filter(
+        models.AuthToken.token_hash == token_hash,
+        models.AuthToken.purpose == purpose,
+        models.AuthToken.used_at.is_(None),
+        models.AuthToken.expires_at > datetime.now(timezone.utc),
+    ).first()
+    if token is None:
+        raise ValueError("The token is invalid or has expired.")
+    token.used_at = datetime.now(timezone.utc)
+    user = get_user_by_id(db, token.user_id)
+    if user is None:
+        raise ValueError("The account for this token no longer exists.")
+    db.commit()
+    return user
+
+
+def mark_email_verified(db: Session, user: models.User) -> None:
+    verification = db.query(models.EmailVerification).filter(
+        models.EmailVerification.user_id == user.id
+    ).first()
+    if verification is None:
+        verification = models.EmailVerification(user_id=user.id, verified_at=datetime.now(timezone.utc))
+        db.add(verification)
+    else:
+        verification.verified_at = datetime.now(timezone.utc)
 
 
 def record_login_attempt(
@@ -224,36 +277,38 @@ def seed_default_auth_users(db: Session) -> None:
         return
 
     first_student = db.query(models.Student).order_by(models.Student.id).first()
-    demo_password = "demo123"
+    seed_password = os.getenv("FORGR_SEED_PASSWORD")
+    if not seed_password:
+        return
 
     seed_rows = [
         {
             "email": "admin@forgr.app",
-            "password": demo_password,
+            "password": seed_password,
             "role": "admin",
             "linked_profile_id": None,
         },
         {
             "email": "faculty@forgr.app",
-            "password": demo_password,
+            "password": seed_password,
             "role": "faculty",
             "linked_profile_id": None,
         },
         {
             "email": "placement@forgr.app",
-            "password": demo_password,
+            "password": seed_password,
             "role": "placement_cell",
             "linked_profile_id": None,
         },
         {
             "email": "recruiter@forgr.app",
-            "password": demo_password,
+            "password": seed_password,
             "role": "recruiter",
             "linked_profile_id": None,
         },
         {
             "email": "parent1@forgr.app",
-            "password": demo_password,
+            "password": seed_password,
             "role": "parent",
             "linked_profile_id": first_student.id if first_student is not None else None,
         },
@@ -263,7 +318,7 @@ def seed_default_auth_users(db: Session) -> None:
         seed_rows.append(
             {
                 "email": first_student.email,
-                "password": demo_password,
+                "password": seed_password,
                 "role": "student",
                 "linked_profile_id": first_student.id,
             }
@@ -352,6 +407,97 @@ def trigger_ml_risk_evaluation(db: Session, student_id: str):
         risk_row.attendance_risk = attendance_risk_val
         risk_row.placement_risk = placement_risk_val
         risk_row.ai_suggestion = ai_suggestion
+
+
+def sync_student_ml_evaluations(db: Session, student_id: str) -> None:
+    """
+    Unified ML pipeline synchronization for a student:
+    1. Re-evaluates ML Risk Prediction (Backlog risk, Attendance risk, Placement risk, Dropout risk, Interventions).
+    2. Re-evaluates Employability & Placement Readiness (Employability Score, Placement Probability, Package LPA).
+    3. Re-synchronizes StudentProfile dynamic JSON.
+    """
+    trigger_ml_risk_evaluation(db, student_id)
+
+    student = db.query(models.Student).filter(models.Student.student_id == student_id).first()
+    if not student:
+        return
+
+    latest_att = (
+        db.query(models.Attendance)
+        .filter(models.Attendance.student_id == student_id)
+        .order_by(models.Attendance.semester.desc())
+        .first()
+    )
+    latest_acad = (
+        db.query(models.Academic)
+        .filter(models.Academic.student_id == student_id)
+        .order_by(models.Academic.semester.desc())
+        .first()
+    )
+    skill_row = db.query(models.Skill).filter(models.Skill.student_id == student_id).first()
+    portfolio_row = db.query(models.Portfolio).filter(models.Portfolio.student_id == student_id).first()
+    placement_row = db.query(models.Placement).filter(models.Placement.student_id == student_id).first()
+
+    aptitude = placement_row.aptitude_score if placement_row else (skill_row.coding_score // 3 if skill_row and skill_row.coding_score else 70)
+    resume = placement_row.resume_score if placement_row else 70
+    comm = placement_row.communication_score if placement_row else (skill_row.communication if skill_row else 70)
+    interview = placement_row.interview_readiness if placement_row else 70
+
+    cgpa = latest_acad.cgpa if latest_acad else 7.0
+    coding_score = skill_row.coding_score if skill_row else 150
+    projects = portfolio_row.projects if portfolio_row else 1
+    certs = portfolio_row.certifications if portfolio_row else 1
+    gh_score = portfolio_row.github_score if portfolio_row else 60
+    att_pct = latest_att.attendance_percentage if latest_att else 80.0
+
+    emp_res = ml_service.calculate_employability_score(
+        aptitude_score=aptitude,
+        resume_score=resume,
+        communication_score=comm,
+        interview_readiness=interview,
+        coding_score=coding_score,
+        cgpa=cgpa,
+        projects=projects,
+        certifications=certs,
+        github_score=gh_score,
+        attendance_percentage=att_pct,
+    )
+    plc_res = ml_service.predict_placement(
+        aptitude_score=aptitude,
+        resume_score=resume,
+        communication_score=comm,
+        interview_readiness=interview,
+    )
+
+    emp_score = emp_res.get("employability_score", 0.0)
+    plc_prob = plc_res.get("placement_probability", "Low")
+    pkg_lpa = plc_res.get("estimated_package_lpa", round(max(3.0, emp_score * 0.12), 2))
+
+    if not placement_row:
+        placement_row = models.Placement(
+            student_id=student_id,
+            aptitude_score=aptitude,
+            resume_score=resume,
+            communication_score=comm,
+            interview_readiness=interview,
+            employability_score=emp_score,
+            placement_probability=plc_prob,
+            placed=False,
+            package_lpa=pkg_lpa,
+        )
+        db.add(placement_row)
+    else:
+        placement_row.employability_score = emp_score
+        placement_row.placement_probability = plc_prob
+        placement_row.package_lpa = pkg_lpa
+
+    prof_row = db.query(models.StudentProfile).filter(models.StudentProfile.student_id == student_id).first()
+    new_profile = _default_profile(db, student)
+    new_profile["placement_probability"] = plc_prob
+    if prof_row:
+        prof_row.profile_json = _profile_dict_to_row_data(new_profile)
+    else:
+        db.add(models.StudentProfile(student_id=student_id, profile_json=_profile_dict_to_row_data(new_profile)))
 
 
 # ── Dynamic Student Profile Builder & Synchronizer ──────────────────
@@ -822,7 +968,16 @@ def build_admin_dashboard(db: Session, branch: str | None = None, year: int | No
         1 for sid, data in latest_att_map.items()
         if data["attendance_percentage"] < 75
     )
-    placement_ready = sum(1 for p in placement_map.values() if p.employability_score >= 60)
+    placement_ready = sum(1 for p in placement_map.values() if (p.employability_score and p.employability_score >= 60) or getattr(p, "placement_probability", "") in ("Medium", "High"))
+
+    emp_scores = [p.employability_score for p in placement_map.values() if p.employability_score is not None]
+    avg_emp = round(sum(emp_scores) / len(emp_scores), 1) if emp_scores else 0.0
+
+    att_values = [d["attendance_percentage"] for d in latest_att_map.values() if d.get("attendance_percentage") is not None]
+    avg_att = round(sum(att_values) / len(att_values), 1) if att_values else 0.0
+
+    cgpa_values = [d["cgpa"] for d in latest_acad_map.values() if d.get("cgpa") is not None]
+    avg_cgpa = round(sum(cgpa_values) / len(cgpa_values), 2) if cgpa_values else 0.0
 
     risk_counter = Counter(risk_map.values())
     risk_distribution = [
@@ -867,6 +1022,9 @@ def build_admin_dashboard(db: Session, branch: str | None = None, year: int | No
         high_risk_students=high_risk,
         low_attendance_students=low_attendance,
         placement_ready_students=placement_ready,
+        avg_employability=avg_emp,
+        avg_attendance=avg_att,
+        avg_cgpa=avg_cgpa,
         risk_distribution=risk_distribution,
         alerts=alerts,
         student_rows=student_rows,
@@ -1153,3 +1311,72 @@ def build_recruiter_dashboard(db: Session, branch: str | None = None, min_cgpa: 
         top_skills=top_skills,
         candidates=candidates,
     )
+
+
+# ── Audit Logs & Import History ──────────────────────────────────────
+
+def get_audit_logs(
+    db: Session,
+    limit: int = 100,
+    offset: int = 0,
+    action: str | None = None,
+    table_name: str | None = None,
+    search: str | None = None,
+) -> list[models.EditAuditLog]:
+    query = db.query(models.EditAuditLog)
+    if action and action != "all":
+        query = query.filter(models.EditAuditLog.action == action)
+    if table_name and table_name != "all":
+        query = query.filter(models.EditAuditLog.table_name == table_name)
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            (models.EditAuditLog.user_email.ilike(s)) |
+            (models.EditAuditLog.student_id.ilike(s)) |
+            (models.EditAuditLog.field_changed.ilike(s))
+        )
+    return query.order_by(models.EditAuditLog.created_at.desc()).offset(offset).limit(limit).all()
+
+
+def get_import_history(
+    db: Session,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[models.ImportHistory]:
+    return db.query(models.ImportHistory).order_by(models.ImportHistory.created_at.desc()).offset(offset).limit(limit).all()
+
+
+def create_import_history_record(
+    db: Session,
+    import_batch_id: str,
+    admin_email: str,
+    dataset_type: str,
+    import_mode: str,
+    file_name: str,
+    total_rows: int = 0,
+    inserted_rows: int = 0,
+    updated_rows: int = 0,
+    skipped_rows: int = 0,
+    failed_rows: int = 0,
+    status: str = "Completed",
+    error_log_json: str | None = None,
+) -> models.ImportHistory:
+    record = models.ImportHistory(
+        import_batch_id=import_batch_id,
+        admin_email=admin_email,
+        dataset_type=dataset_type,
+        import_mode=import_mode,
+        file_name=file_name,
+        total_rows=total_rows,
+        inserted_rows=inserted_rows,
+        updated_rows=updated_rows,
+        skipped_rows=skipped_rows,
+        failed_rows=failed_rows,
+        status=status,
+        error_log_json=error_log_json,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+

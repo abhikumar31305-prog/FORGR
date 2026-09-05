@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import crud
 import models
-from auth import get_db, require_role
+from auth import check_student_access, get_db, require_role
 from ml.career.recommend import recommend_careers
 
 router = APIRouter(prefix="/api/career", tags=["Career Recommendation"])
@@ -49,8 +49,9 @@ def get_student_career_recommendations(
     student_id: str,
     top_n: int = 3,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("student", "faculty", "placement_cell", "admin")),
+    current_user: models.User = Depends(require_role("student", "faculty", "placement_cell", "admin")),
 ):
+    check_student_access(current_user, student_id, db)
     """
     Fetch student database skills, academic, and portfolio metrics to generate career recommendations.
     """

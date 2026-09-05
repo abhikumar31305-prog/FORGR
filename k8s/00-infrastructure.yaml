@@ -1,0 +1,244 @@
+---
+# Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: forgr
+  labels:
+    name: forgr
+    environment: production
+
+---
+# ConfigMap for non-sensitive configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forgr-config
+  namespace: forgr
+data:
+  FORGR_ENV: "production"
+  FORGR_CORS_ORIGINS: "https://app.example.com,https://www.example.com"
+  FORGR_DB_POOL_SIZE: "20"
+  FORGR_DB_MAX_OVERFLOW: "40"
+  FORGR_DB_POOL_RECYCLE: "1800"
+  FORGR_RATE_LIMIT_PER_MINUTE: "120"
+  FORGR_MAX_REQUEST_BYTES: "20971520"
+  FORGR_LOG_LEVEL: "INFO"
+  FORGR_LOG_FORMAT: "json"
+  FORGR_NOTIFICATION_PROVIDER: "smtp"
+  FORGR_SMTP_HOST: "smtp.example.com"
+  FORGR_SMTP_PORT: "587"
+  FORGR_SMTP_FROM: "noreply@forgr.app"
+
+---
+# Secret for sensitive configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: forgr-secrets
+  namespace: forgr
+type: Opaque
+stringData:
+  FORGR_SECRET_KEY: "REPLACE_WITH_SECURE_SECRET_KEY_MIN_32_CHARS"
+  FORGR_SEED_PASSWORD: "REPLACE_WITH_SECURE_SEED_PASSWORD"
+  POSTGRES_PASSWORD: "REPLACE_WITH_SECURE_DB_PASSWORD"
+  REDIS_PASSWORD: "REPLACE_WITH_SECURE_REDIS_PASSWORD"
+  FORGR_DATABASE_URL: "postgresql://forgr:REPLACE_WITH_DB_PASSWORD@forgr-postgres:5432/forgr_prod"
+  FORGR_REDIS_URL: "redis://:REPLACE_WITH_REDIS_PASSWORD@forgr-redis:6379/0"
+  FORGR_SMTP_USER: "smtp_username@example.com"
+  FORGR_SMTP_PASSWORD: "REPLACE_WITH_SMTP_PASSWORD"
+
+---
+# PostgreSQL Persistent Volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: forgr
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: forgr-postgres
+  namespace: forgr
+spec:
+  serviceName: forgr-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forgr-postgres
+  template:
+    metadata:
+      labels:
+        app: forgr-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: "forgr"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: forgr-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          value: "forgr_prod"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U forgr
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U forgr
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgr-postgres
+  namespace: forgr
+  labels:
+    app: forgr-postgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+  selector:
+    app: forgr-postgres
+
+---
+# Redis Persistent Volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: forgr
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+# Redis StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: forgr-redis
+  namespace: forgr
+spec:
+  serviceName: forgr-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forgr-redis
+  template:
+    metadata:
+      labels:
+        app: forgr-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+          - redis-server
+          - "--requirepass"
+          - "$(REDIS_PASSWORD)"
+          - "--appendonly"
+          - "yes"
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: forgr-secrets
+              key: REDIS_PASSWORD
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgr-redis
+  namespace: forgr
+  labels:
+    app: forgr-redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  clusterIP: None
+  selector:
+    app: forgr-redis

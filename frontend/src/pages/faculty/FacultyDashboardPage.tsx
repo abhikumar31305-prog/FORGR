@@ -154,7 +154,12 @@ export function FacultyDashboardPage() {
       </div>
 
       <div className="fg-row fg-card">
-        <h3>Student Performance Table <span className="fg-card-action">Export</span></h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <h3 style={{ margin: 0 }}>Student Performance Table</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="fg-card-action">Export</span>
+          </div>
+        </div>
         <div className="fg-cap">Detailed view of assigned students. Click a row for more details.</div>
         <div className="fg-controls">
           <input

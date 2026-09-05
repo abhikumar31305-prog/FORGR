@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import crud
 import models
-from auth import get_db, get_current_user, require_role
+from auth import check_student_access, get_db, get_current_user, require_role
 from ml.employability.scoring import calculate_employability_score
 
 router = APIRouter(prefix="/api/employability", tags=["Employability"])
@@ -49,8 +49,9 @@ def compute_employability(payload: EmployabilityScoreRequest):
 def get_student_employability(
     student_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("student", "faculty", "placement_cell", "admin")),
+    current_user: models.User = Depends(require_role("student", "faculty", "placement_cell", "admin")),
 ):
+    check_student_access(current_user, student_id, db)
     """
     Fetch student DB profile metrics and evaluate their employability score breakdown.
     """

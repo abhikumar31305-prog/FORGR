@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 Role = Literal["student", "faculty", "placement_cell", "parent", "recruiter", "admin"]
 RiskLevel = Literal["Low", "Medium", "High"]
@@ -45,6 +45,19 @@ class RegisterRequest(BaseModel):
     linked_profile_id: Optional[int] = None
 
 
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    password: str = Field(min_length=8)
+
+
+class EmailVerificationConfirm(BaseModel):
+    token: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -77,8 +90,8 @@ class SkillProgress(BaseModel):
 
 
 class StudentProfileUpdate(BaseModel):
-    attendance_percent: Optional[int] = Field(default=None, ge=0, le=100)
-    marks: Optional[Dict[str, int]] = None
+    attendance_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    marks: Optional[Dict[str, float]] = None
     skills: Optional[List[SkillProgress]] = None
     resume_summary: Optional[str] = None
     resume_link: Optional[str] = None
@@ -101,8 +114,8 @@ class StudentProfileResponse(BaseModel):
     department: str
     year: int
     report_summary: str
-    attendance_percent: int
-    marks: Dict[str, int]
+    attendance_percent: float
+    marks: Dict[str, float]
     skills: List[SkillProgress]
     resume_summary: str
     resume_link: str
@@ -233,6 +246,9 @@ class RiskPredictionResponse(BaseModel):
     placement_risk: str = "Low"
     overall_risk: str = "Low"
     ai_suggestion: Optional[str] = None
+    model_version: Optional[str] = None
+    model_name: Optional[str] = None
+    confidence: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -313,6 +329,9 @@ class AdminDashboardResponse(BaseModel):
     high_risk_students: int
     low_attendance_students: int
     placement_ready_students: int
+    avg_employability: float = 70.0
+    avg_attendance: float = 80.0
+    avg_cgpa: float = 7.0
     risk_distribution: List[RiskDistributionItem]
     alerts: List[str]
     student_rows: List[StudentTableRow]
@@ -401,3 +420,188 @@ class RecruiterDashboardResponse(BaseModel):
     avg_employability: float
     top_skills: Dict[str, float] = Field(default_factory=dict)
     candidates: List[RecruiterCandidateRow]
+
+
+# ── Bulk Import & Audit Log Schemas ──────────────────────────────────
+
+class ImportValidationError(BaseModel):
+    row_number: int
+    student_id: Optional[str] = None
+    field: str
+    invalid_value: Optional[str] = None
+    error_reason: str
+    suggested_correction: str
+    severity: Literal["error", "warning", "duplicate"] = "error"
+
+
+class ColumnMappingItem(BaseModel):
+    detected_column: str
+    mapped_field: str
+    status: Literal["valid", "optional", "unmapped", "custom"] = "valid"
+
+
+class ImportPreviewResponse(BaseModel):
+    total_rows: int
+    valid_rows: int
+    warning_rows: int
+    error_rows: int
+    duplicate_rows: int
+    new_students: int = 0
+    existing_students: int = 0
+    invalid_rows: int = 0
+    current_db_students: int = 0
+    blocking_errors: bool = False
+    columns_detected: List[str]
+    mappings: List[ColumnMappingItem]
+    preview_records: List[Dict[str, Any]]
+    validation_errors: List[ImportValidationError]
+    can_import: bool
+
+
+class ImportHistoryItem(BaseModel):
+    id: int
+    import_batch_id: str
+    admin_email: str
+    dataset_type: str
+    import_mode: str
+    file_name: str
+    total_rows: int
+    inserted_rows: int
+    updated_rows: int
+    skipped_rows: int
+    failed_rows: int
+    status: str
+    error_log_json: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditLogItem(BaseModel):
+    id: int
+    table_name: str
+    student_id: Optional[str] = None
+    user_email: str
+    action: str
+    field_changed: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── ML Model Registry Schemas ────────────────────────────────────────
+
+class ModelRegistryCreate(BaseModel):
+    model_name: str
+    model_version: str
+    model_type: str  # 'backlog_risk', 'placement', 'employability', 'career'
+    file_path: str
+    metrics_json: Optional[str] = None
+
+
+class ModelRegistryResponse(BaseModel):
+    id: int
+    model_name: str
+    model_version: str
+    model_type: str
+    file_path: str
+    metrics_json: Optional[str] = None
+    is_active: bool = False
+    created_at: datetime
+    promoted_at: Optional[datetime] = None
+    promoted_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ── ML Monitoring Schemas ────────────────────────────────────────────
+
+class PredictionLogResponse(BaseModel):
+    id: int
+    student_id: str
+    model_type: str
+    model_version: Optional[str] = None
+    prediction: str
+    confidence: Optional[float] = None
+    input_features_json: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DriftReportResponse(BaseModel):
+    id: int
+    model_type: str
+    model_version: Optional[str] = None
+    psi_score: float
+    feature_drifts_json: Optional[str] = None
+    is_drifted: bool = False
+    window_start: datetime
+    window_end: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MonitoringMetricsResponse(BaseModel):
+    model_type: str
+    total_predictions: int
+    avg_confidence: float
+    risk_distribution: Dict[str, int]
+    recent_drift: Optional[DriftReportResponse] = None
+    prediction_volume_24h: int
+    prediction_volume_7d: int
+
+
+# ── Compliance / Audit Schemas ───────────────────────────────────────
+
+class ComprehensiveAuditLogItem(BaseModel):
+    id: int
+    timestamp: datetime
+    actor_email: str
+    actor_role: Optional[str] = None
+    action_type: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    details_json: Optional[str] = None
+    ip_address: Optional[str] = None
+    request_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ConsentRequest(BaseModel):
+    consent_type: str  # 'data_processing', 'analytics', 'marketing', 'third_party_sharing'
+    granted: bool = True
+    policy_version: str = "1.0"
+
+
+class ConsentResponse(BaseModel):
+    id: int
+    user_id: int
+    consent_type: str
+    granted: bool
+    granted_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    policy_version: str = "1.0"
+
+    class Config:
+        from_attributes = True
+
+
+class ConsentSummary(BaseModel):
+    """Aggregated consent status for a user."""
+    data_processing: bool = False
+    analytics: bool = False
+    marketing: bool = False
+    third_party_sharing: bool = False
+    consents: List[ConsentResponse] = []
+

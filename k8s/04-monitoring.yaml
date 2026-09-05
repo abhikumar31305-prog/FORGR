@@ -1,0 +1,132 @@
+---
+# Prometheus ServiceMonitor for Backend
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: forgr-backend
+  namespace: forgr
+  labels:
+    app: forgr-backend
+spec:
+  selector:
+    matchLabels:
+      app: forgr-backend
+  endpoints:
+  - port: api
+    interval: 30s
+    path: /metrics
+
+---
+# PrometheusRule for Alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: forgr-alerts
+  namespace: forgr
+spec:
+  groups:
+  - name: forgr.rules
+    interval: 30s
+    rules:
+    # Backend unavailable
+    - alert: FORGRBackendDown
+      expr: up{job="forgr-backend"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "FORGR Backend is down"
+        description: "FORGR Backend has been unavailable for 5 minutes"
+    
+    # High error rate
+    - alert: FORGRHighErrorRate
+      expr: |
+        (sum(rate(http_requests_total{status=~"5.."}[5m])) by (instance) /
+         sum(rate(http_requests_total[5m])) by (instance)) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "FORGR Backend high error rate"
+        description: "Error rate is above 5% for 5 minutes"
+    
+    # Database connection pool exhausted
+    - alert: DatabaseConnectionPoolExhausted
+      expr: |
+        pg_stat_activity_count{datname="forgr_prod"} > 15
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Database connection pool nearly exhausted"
+        description: "Database connections are above 15 of 20"
+    
+    # Redis memory usage
+    - alert: RedisHighMemoryUsage
+      expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Redis memory usage is high"
+        description: "Redis is using over 80% of allocated memory"
+
+---
+# Loki LogQL Dashboard (example for Grafana)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-dashboards
+  namespace: forgr
+data:
+  forgr-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "FORGR Application Logs",
+        "panels": [
+          {
+            "title": "Error Log Entries",
+            "targets": [
+              {
+                "expr": "{namespace=\"forgr\"} | level=\"ERROR\""
+              }
+            ]
+          },
+          {
+            "title": "API Request Rate",
+            "targets": [
+              {
+                "expr": "{namespace=\"forgr\", app=\"forgr-backend\"} | json | line_format \"{{.status}}\""
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# Event exporter - Send Kubernetes events to logging system
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: event-exporter-config
+  namespace: forgr
+data:
+  config.yaml: |
+    logLevel: info
+    logFormat: json
+    receivers:
+      default:
+        name: Event Receiver
+    handlers:
+      default:
+        name: Default Handler
+        receiver: default
+    route:
+      routes:
+      - name: All events
+        receivers:
+        - default
+        matchers:
+          namespace:
+          - "forgr"

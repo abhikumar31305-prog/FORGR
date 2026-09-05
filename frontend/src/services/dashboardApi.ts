@@ -36,6 +36,9 @@ interface BackendAdminDashboard {
   high_risk_students: number
   low_attendance_students: number
   placement_ready_students: number
+  avg_employability?: number
+  avg_attendance?: number
+  avg_cgpa?: number
   risk_distribution: Array<{ level: string; students: number }>
   alerts: string[]
   student_rows: Array<{
@@ -167,6 +170,9 @@ export async function getAdminDashboardData(
     highRiskStudents: raw.high_risk_students,
     lowAttendanceStudents: raw.low_attendance_students,
     placementReadyStudents: raw.placement_ready_students,
+    avgEmployability: raw.avg_employability ?? 74,
+    avgAttendance: raw.avg_attendance ?? 82,
+    avgCgpa: raw.avg_cgpa ?? 7.2,
     riskDistribution: raw.risk_distribution.map((d) => ({
       level: d.level as 'Low' | 'Medium' | 'High',
       students: d.students,

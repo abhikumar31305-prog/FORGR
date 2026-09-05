@@ -11,7 +11,7 @@ import {
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { getPortfolio, getSkills, updatePortfolio, updateSkills } from '../../services/featureApi'
 import type { PortfolioRecord, SkillRecord } from '../../types/domain'
 

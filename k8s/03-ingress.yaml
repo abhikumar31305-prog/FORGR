@@ -1,0 +1,153 @@
+---
+# Nginx Ingress Controller (if not already installed)
+# Install with: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#               helm install ingress-nginx ingress-nginx/ingress-nginx
+
+---
+# Ingress for Frontend and Backend API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forgr-ingress
+  namespace: forgr
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - app.example.com
+    - api.example.com
+    secretName: forgr-tls-cert
+  rules:
+  # Frontend
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: forgr-frontend
+            port:
+              number: 80
+  # Backend API
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: forgr-backend
+            port:
+              number: 8000
+
+---
+# ClusterIssuer for Let's Encrypt (requires cert-manager)
+# Install cert-manager: https://cert-manager.io/docs/installation/
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Network Policy - Restrict traffic between pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forgr-network-policy
+  namespace: forgr
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress controller to reach frontend and backend
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8000
+  # Allow backend to reach database
+  - from:
+    - podSelector:
+        matchLabels:
+          app: forgr-backend
+    to:
+    - podSelector:
+        matchLabels:
+          app: forgr-postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow backend to reach Redis
+  - from:
+    - podSelector:
+        matchLabels:
+          app: forgr-backend
+    to:
+    - podSelector:
+        matchLabels:
+          app: forgr-redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  egress:
+  # Allow all outbound traffic (adjust as needed)
+  - to:
+    - namespaceSelector: {}
+
+---
+# Pod Disruption Budget - Ensure minimum availability during node maintenance
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: forgr-backend-pdb
+  namespace: forgr
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: forgr-backend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: forgr-frontend-pdb
+  namespace: forgr
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: forgr-frontend

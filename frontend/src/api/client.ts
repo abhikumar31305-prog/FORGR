@@ -1,4 +1,18 @@
-const CONFIGURED_API_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const DEFAULT_PRODUCTION_API_URL = 'https://forgr-backend-piho.onrender.com'
+
+function resolveApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+  if (envUrl && !envUrl.includes('127.0.0.1') && !envUrl.includes('localhost')) {
+    return envUrl.replace(/\/$/, '')
+  }
+  // Fallback to live Render backend when hosted on Vercel or any HTTPS production domain
+  if (typeof window !== 'undefined' && (window.location.hostname.includes('vercel.app') || window.location.protocol === 'https:')) {
+    return DEFAULT_PRODUCTION_API_URL
+  }
+  return envUrl.replace(/\/$/, '')
+}
+
+const CONFIGURED_API_URL = resolveApiBaseUrl()
 const SESSION_STORAGE_KEY = 'forgr_user_session'
 
 let accessToken = ''

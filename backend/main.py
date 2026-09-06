@@ -115,10 +115,11 @@ app.add_middleware(
 )
 
 # CORS middleware
-cors_origins = [origin.strip() for origin in os.getenv("FORGR_CORS_ORIGINS", "http://127.0.0.1:5173").split(",") if origin.strip()]
+cors_origins = [origin.strip().rstrip("/") for origin in os.getenv("FORGR_CORS_ORIGINS", "http://127.0.0.1:5173").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

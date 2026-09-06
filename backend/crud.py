@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 import ml_service
+import secrets
+import string
 from security import hash_password, verify_password
 
 
@@ -74,6 +76,122 @@ def create_student(db: Session, student: schemas.StudentCreate):
     db.commit()
     db.refresh(db_student)
     return db_student
+def create_admin_student(
+    db: Session,
+    payload: schemas.AdminStudentCreate,
+):
+    email = payload.email.strip().lower()
+
+    # ---------------------------------------------------------
+    # 1. Check duplicate email
+    # ---------------------------------------------------------
+    existing_user = get_user_by_email(db, email)
+
+    if existing_user is not None:
+        raise ValueError(
+            "A user with this email already exists."
+        )
+
+    existing_student = (
+        db.query(models.Student)
+        .filter(models.Student.email.ilike(email))
+        .first()
+    )
+
+    if existing_student is not None:
+        raise ValueError(
+            "A student with this email already exists."
+        )
+
+    # ---------------------------------------------------------
+    # 2. Generate unique Student ID
+    # ---------------------------------------------------------
+    last_student = (
+        db.query(models.Student)
+        .filter(
+            models.Student.student_id.like("STU2026%")
+        )
+        .order_by(models.Student.id.desc())
+        .first()
+    )
+
+    if last_student is not None:
+        existing_id = str(last_student.student_id)
+
+        try:
+            last_number = int(existing_id[-4:])
+        except ValueError:
+            last_number = 0
+    else:
+        last_number = 0
+
+    next_number = last_number + 1
+
+    student_id = f"STU2026{next_number:04d}"
+
+    # Database-level uniqueness protection
+    while (
+        db.query(models.Student)
+        .filter(
+            models.Student.student_id == student_id
+        )
+        .first()
+        is not None
+    ):
+        next_number += 1
+        student_id = f"STU2026{next_number:04d}"
+
+    # ---------------------------------------------------------
+    # 3. Generate secure temporary password
+    # ---------------------------------------------------------
+    alphabet = (
+        string.ascii_letters
+        + string.digits
+        + "!@#$%^&*"
+    )
+
+    temporary_password = "".join(
+        secrets.choice(alphabet)
+        for _ in range(12)
+    )
+
+    # ---------------------------------------------------------
+    # 4. Create Student + User atomically
+    # ---------------------------------------------------------
+    try:
+        db_student = models.Student(
+            student_id=student_id,
+            name=payload.name.strip(),
+            email=email,
+            department=payload.department.strip(),
+            year=payload.year,
+        )
+
+        db.add(db_student)
+
+        # Get generated Student.id before creating User
+        db.flush()
+
+        db_user = models.User(
+            email=email,
+            password_hash=hash_password(
+                temporary_password
+            ),
+            role=models.UserRole.STUDENT,
+            linked_profile_id=db_student.id,
+        )
+
+        db.add(db_user)
+
+        db.commit()
+
+        db.refresh(db_student)
+
+        return db_student, temporary_password
+
+    except Exception:
+        db.rollback()
+        raise
 
 def get_students(db: Session, branch: str | None = None, year: int | None = None, risk: str | None = None, offset: int = 0, limit: int = 50):
     query = db.query(models.Student)

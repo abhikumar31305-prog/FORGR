@@ -1,4 +1,5 @@
 from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 import crud
@@ -6,6 +7,9 @@ import models
 import schemas
 from database import SessionLocal
 from security import create_access_token, create_refresh_token, decode_token
+
+# Swagger / Bearer scheme
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _role_value(role: object) -> str:
@@ -77,6 +81,7 @@ def issue_token_response(db: Session, user: models.User) -> schemas.LoginRespons
     return schemas.LoginResponse(
         access_token=create_access_token(payload),
         refresh_token=create_refresh_token(payload),
+        token_type="bearer",
         user=build_user_response(db, user),
     )
 
@@ -102,15 +107,24 @@ def refresh_user_tokens(db: Session, refresh_token: str) -> schemas.LoginRespons
 
 
 def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> models.User:
-    if not authorization or not authorization.startswith("Bearer "):
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
 
-    token = authorization.removeprefix("Bearer ").strip()
-    payload = decode_token(token, expected_type="access")
-    user_id = int(payload["sub"])
+    try:
+        payload = decode_token(token, expected_type="access")
+        user_id = int(payload["sub"])
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token.")
 
     user = crud.get_user_by_id(db, user_id)
     if user is None:
@@ -176,4 +190,4 @@ def check_student_access(current_user: models.User, target_student_id: str, db: 
             detail="Access denied: Recruiters cannot access full academic records directly.",
         )
 
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")

@@ -14,6 +14,10 @@ import models  # noqa: F401  – ensures all models are registered
 
 DATASETS_DIR = Path(__file__).resolve().parent.parent / "datasets"
 
+def _table_is_empty(db, model) -> bool:
+    """Return True if the given database table has no records."""
+    return db.query(model).first() is None
+
 
 def _clean_sid(raw) -> str:
     if pd.isna(raw):

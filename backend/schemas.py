@@ -2,8 +2,20 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Literal, Optional
 
-Role = Literal["student", "faculty", "placement_cell", "parent", "recruiter", "admin"]
+
+# ── Common Types ─────────────────────────────────────────────────────
+
+Role = Literal[
+    "student",
+    "faculty",
+    "placement_cell",
+    "parent",
+    "recruiter",
+    "admin",
+]
+
 RiskLevel = Literal["Low", "Medium", "High"]
+
 
 # ── Student ──────────────────────────────────────────────────────────
 
@@ -13,6 +25,14 @@ class StudentCreate(BaseModel):
     email: str
     department: str
     year: int
+
+
+class AdminStudentCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=5, max_length=255)
+    department: str = Field(min_length=2, max_length=100)
+    year: int = Field(ge=1, le=5)
+
 
 class StudentResponse(BaseModel):
     id: int
@@ -29,6 +49,11 @@ class StudentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminStudentCreateResponse(BaseModel):
+    student: StudentResponse
+    temporary_password: str
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -82,7 +107,7 @@ class LoginResponse(BaseModel):
     user: AuthUserResponse
 
 
-# ── Profile (existing) ──────────────────────────────────────────────
+# ── Profile ──────────────────────────────────────────────────────────
 
 class SkillProgress(BaseModel):
     name: str
@@ -131,7 +156,7 @@ class StudentProfileResponse(BaseModel):
     placement_probability: RiskLevel
 
 
-# ── Granular record response & update schemas ────────────────────────
+# ── Academic ─────────────────────────────────────────────────────────
 
 class AcademicResponse(BaseModel):
     semester: int
@@ -156,6 +181,8 @@ class AcademicUpdate(BaseModel):
     external_avg: Optional[float] = None
 
 
+# ── Attendance ───────────────────────────────────────────────────────
+
 class AttendanceResponse(BaseModel):
     semester: int
     attendance_percentage: float
@@ -169,10 +196,16 @@ class AttendanceResponse(BaseModel):
 
 class AttendanceUpdate(BaseModel):
     semester: Optional[int] = None
-    attendance_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    attendance_percentage: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100
+    )
     classes_attended: Optional[int] = Field(default=None, ge=0)
     classes_conducted: Optional[int] = Field(default=None, ge=0)
 
+
+# ── Skills ───────────────────────────────────────────────────────────
 
 class SkillResponse(BaseModel):
     python: int = 0
@@ -197,6 +230,8 @@ class SkillUpdate(BaseModel):
     coding_score: Optional[int] = Field(default=None, ge=0)
 
 
+# ── Placement ───────────────────────────────────────────────────────
+
 class PlacementResponse(BaseModel):
     aptitude_score: int = 0
     resume_score: int = 0
@@ -216,11 +251,17 @@ class PlacementUpdate(BaseModel):
     resume_score: Optional[int] = Field(default=None, ge=0, le=100)
     communication_score: Optional[int] = Field(default=None, ge=0, le=100)
     interview_readiness: Optional[int] = Field(default=None, ge=0, le=100)
-    employability_score: Optional[float] = Field(default=None, ge=0, le=100)
+    employability_score: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100
+    )
     placement_probability: Optional[RiskLevel] = None
     placed: Optional[bool] = None
     package_lpa: Optional[float] = Field(default=None, ge=0)
 
+
+# ── Portfolio ────────────────────────────────────────────────────────
 
 class PortfolioResponse(BaseModel):
     projects: int = 0
@@ -238,6 +279,8 @@ class PortfolioUpdate(BaseModel):
     github_repositories: Optional[int] = Field(default=None, ge=0)
     github_score: Optional[int] = Field(default=None, ge=0)
 
+
+# ── Risk Prediction ─────────────────────────────────────────────────
 
 class RiskPredictionResponse(BaseModel):
     backlog_risk: str = "Low"
@@ -262,6 +305,8 @@ class RiskPredictionUpdate(BaseModel):
     overall_risk: Optional[RiskLevel] = None
     ai_suggestion: Optional[str] = None
 
+
+# ── ML Simulation ────────────────────────────────────────────────────
 
 class MlSimulationRequest(BaseModel):
     attendance_percentage: float = 85.0
@@ -289,8 +334,7 @@ class MlSimulationResponse(BaseModel):
     feature_importances: List[FeatureImportanceItem]
 
 
-
-# ── Dashboard aggregate schemas ──────────────────────────────────────
+# ── Dashboard aggregate schemas ─────────────────────────────────────
 
 class StudentDashboardResponse(BaseModel):
     attendance_percent: float

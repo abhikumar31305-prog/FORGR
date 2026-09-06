@@ -809,7 +809,6 @@ def dashboard_recruiter(
 ):
     return crud.build_recruiter_dashboard(db, branch=branch, min_cgpa=min_cgpa, min_employability=min_employability)
 
-
 # ── Admin Audit Logs & Import History Endpoints ──────────────────────
 
 @app.get("/api/admin/audit-logs", response_model=list[schemas.AuditLogItem])
@@ -835,3 +834,30 @@ def get_admin_import_history(
 ):
     """[ADMIN ONLY] Retrieve institutional bulk import history batches."""
     return crud.get_import_history(db, limit=limit, offset=offset)
+
+
+@app.post(
+    "/admin/students",
+    response_model=schemas.AdminStudentCreateResponse,
+    status_code=201,
+)
+def admin_create_student(
+    payload: schemas.AdminStudentCreate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_role("admin")),
+):
+    try:
+        student, temporary_password = crud.create_admin_student(
+            db, payload
+        )
+
+        return schemas.AdminStudentCreateResponse(
+            student=student,
+            temporary_password=temporary_password,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc

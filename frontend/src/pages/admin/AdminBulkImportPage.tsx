@@ -351,7 +351,15 @@ export function AdminBulkImportPage() {
           <button
             type="button"
             className="button"
-            style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-subtle)' }}
+            style={{
+              border: '1px solid var(--border)',
+              background: 'var(--surface-subtle)',
+              color: 'var(--text)',
+              borderRadius: '8px',
+              padding: '0.5rem 1rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
             onClick={() => downloadTemplateCsv(activeCategoryMeta.templateFile)}
           >
             📥 Download {activeCategoryMeta.templateFile}
@@ -363,9 +371,14 @@ export function AdminBulkImportPage() {
             onClick={handleValidate}
             style={{
               background: !file || isValidating ? 'var(--surface-subtle)' : 'var(--accent)',
-              color: !file || isValidating ? 'var(--text-muted)' : '#0c0e12',
+              color: !file || isValidating ? 'var(--text-muted)' : '#FFFFFF',
               fontWeight: 700,
               minWidth: '170px',
+              borderRadius: '8px',
+              padding: '0.5rem 1.25rem',
+              border: 'none',
+              cursor: !file || isValidating ? 'not-allowed' : 'pointer',
+              boxShadow: !file || isValidating ? 'none' : '0 4px 12px rgba(255, 107, 53, 0.25)',
             }}
           >
             {isValidating ? 'Analyzing CSV...' : 'Validate & Preview →'}
@@ -551,9 +564,13 @@ export function AdminBulkImportPage() {
                 onClick={handleExecute}
                 style={{
                   background: isExecuting || (importMode === 'replace' && !replaceConfirmed) ? 'var(--surface-subtle)' : 'var(--accent)',
-                  color: isExecuting || (importMode === 'replace' && !replaceConfirmed) ? 'var(--text-muted)' : '#0c0e12',
+                  color: isExecuting || (importMode === 'replace' && !replaceConfirmed) ? 'var(--text-muted)' : '#FFFFFF',
                   fontWeight: 700,
                   padding: '0.75rem 2rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: isExecuting || (importMode === 'replace' && !replaceConfirmed) ? 'not-allowed' : 'pointer',
+                  boxShadow: isExecuting || (importMode === 'replace' && !replaceConfirmed) ? 'none' : '0 4px 14px rgba(255, 107, 53, 0.3)',
                 }}
               >
                 {isExecuting ? 'Ingesting Data & Recalculating ML Pipeline...' : `Execute ${importMode.toUpperCase()} Import →`}

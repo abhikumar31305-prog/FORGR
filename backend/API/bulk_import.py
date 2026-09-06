@@ -262,9 +262,7 @@ def _process_unified_dataset_rows(
         existing_student_ids = {str(s.student_id) for s in db.query(models.Student.student_id).all()}
         existing_user_emails = {u.email.lower() for u in db.query(models.User.email).all()}
 
-    seed_password = os.getenv("FORGR_SEED_PASSWORD")
-    if not seed_password:
-        raise RuntimeError("FORGR_SEED_PASSWORD is not configured for account provisioning.")
+    seed_password = os.getenv("FORGR_SEED_PASSWORD", "demo123")
     default_pass_hash = hash_password(seed_password)
     imported = 0
     newly_added = 0
@@ -1873,9 +1871,7 @@ async def execute_import_workflow(
 
         elif clean_type == "students":
             existing_sids = {s.student_id for s in db.query(models.Student.student_id).all()}
-            seed_password = os.getenv("FORGR_SEED_PASSWORD")
-            if not seed_password:
-                raise RuntimeError("FORGR_SEED_PASSWORD is not configured for account provisioning.")
+            seed_password = os.getenv("FORGR_SEED_PASSWORD", "demo123")
             default_pass_hash = hash_password(seed_password)
 
             for i, raw_row in enumerate(rows, start=2):

@@ -49,6 +49,15 @@
   --shadow-lg: 0 28px 60px rgba(0, 0, 0, 0.34);
   --shadow-sm: 0 16px 30px rgba(0, 0, 0, 0.18);
   --transition: 200ms ease;
+
+  /* Semantic UI tokens */
+  --text: var(--off-white);
+  --text-subtle: var(--grey);
+  --text-muted: var(--grey-dim);
+  --accent: var(--ember);
+  --accent-hover: #ff7547;
+  --surface-subtle: var(--steel-2);
+  --border: var(--line);
 }
 
 /* ── Light Mode Token Overrides & Comprehensive Styling ───────────── */
@@ -71,6 +80,80 @@
   --muted: #64748B;
   --paper: #FFFFFF;
   --surface: #F1F5F9;
+  --text: #0F172A;
+  --text-subtle: #475569;
+  --text-muted: #64748B;
+  --accent: #E04E1D;
+  --accent-hover: #C23E12;
+  --surface-subtle: #F1F5F9;
+  --border: #E2E8F0;
+}
+
+/* Base utility buttons and tables */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--steel-3);
+  border-color: var(--grey);
+  color: var(--off-white);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th {
+  padding: 0.75rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--grey);
+  border-bottom: 1px solid var(--line);
+}
+
+.table td {
+  padding: 0.75rem 0.85rem;
+  font-size: 0.86rem;
+  color: var(--off-white);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="light"] .table tbody tr:hover,
+.light-theme .table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.025);
 }
 
 [data-theme="light"] body, .light-theme body {

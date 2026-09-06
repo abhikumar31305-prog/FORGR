@@ -48,10 +48,10 @@ export function AdminAuditLogsPage() {
           <p className="subtle" style={{ fontSize: '0.95rem' }}>Immutable logs of all administrative mutations, bulk imports, and record edits.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-          <Link to="/admin/bulk-import" className="button" style={{ background: 'var(--accent)', color: '#0c0e12', fontWeight: 700 }}>
+          <Link to="/admin/bulk-import" className="button" style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.5rem 1.1rem' }}>
             Bulk Data Import
           </Link>
-          <Link to="/admin" className="button" style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', color: 'var(--text)' }}>
+          <Link to="/admin" className="button" style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', color: 'var(--text)', borderRadius: '8px', padding: '0.5rem 1.1rem' }}>
             Admin Dashboard
           </Link>
         </div>
@@ -107,7 +107,7 @@ export function AdminAuditLogsPage() {
               <option value="unified">Unified</option>
             </select>
           </div>
-          <button type="submit" className="button" style={{ background: 'var(--accent)', color: '#0c0e12', fontWeight: 700 }}>
+          <button type="submit" className="button" style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.6rem 1.25rem' }}>
             Search
           </button>
         </form>

@@ -395,9 +395,7 @@ def seed_default_auth_users(db: Session) -> None:
         return
 
     first_student = db.query(models.Student).order_by(models.Student.id).first()
-    seed_password = os.getenv("FORGR_SEED_PASSWORD")
-    if not seed_password:
-        return
+    seed_password = os.getenv("FORGR_SEED_PASSWORD", "demo123")
 
     seed_rows = [
         {

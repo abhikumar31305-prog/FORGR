@@ -1,0 +1,48 @@
+# Git and CI/CD
+.git
+.gitignore
+.github
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+backend/forgr.db*
+backend/logs/*
+!backend/logs/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+backups/
+
+# Node and frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# Environment files with secrets (keep .example only)
+.env
+.env.local
+.env.*.local
+
+# Documentation & raw datasets
+*.docx
+*.pdf
+datasets/
+notebooks/
+combined_student_data_different.csv
+Student Risk Prediction-*.png
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

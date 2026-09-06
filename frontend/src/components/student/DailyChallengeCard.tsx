@@ -14,26 +14,23 @@ interface DailyChallengeCardProps {
 }
 
 export function DailyChallengeCard({ studentId, onStreakUpdate, onScoreBoost }: DailyChallengeCardProps) {
-  const [question, setQuestion] = useState<ChallengeQuestion | null>(null)
-  const [selectedOption, setSelectedOption] = useState<number | null>(null)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-  const [streak, setStreak] = useState(1)
+  const [question] = useState<ChallengeQuestion | null>(() => getTodayChallenge())
+  const [selectedOption, setSelectedOption] = useState<number | null>(() => {
+    const status = isTodayChallengeCompleted(studentId)
+    const q = getTodayChallenge()
+    return status.isCompleted && q ? q.correctIndex : null
+  })
+  const [isSubmitted, setIsSubmitted] = useState(() => isTodayChallengeCompleted(studentId).isCompleted)
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(() => isTodayChallengeCompleted(studentId).isCorrect ?? null)
+  const [streak, setStreak] = useState(() => getStudentStreak(studentId))
 
   useEffect(() => {
-    const q = getTodayChallenge()
-    setQuestion(q)
-
-    const currentStreak = getStudentStreak(studentId)
-    setStreak(currentStreak)
-    if (onStreakUpdate) onStreakUpdate(currentStreak)
-
-    const status = isTodayChallengeCompleted(studentId)
-    if (status.isCompleted) {
-      setIsSubmitted(true)
-      setIsCorrect(status.isCorrect ?? true)
-      setSelectedOption(q.correctIndex)
-    }
+    const timer = setTimeout(() => {
+      const currentStreak = getStudentStreak(studentId)
+      setStreak(currentStreak)
+      if (onStreakUpdate) onStreakUpdate(currentStreak)
+    }, 0)
+    return () => clearTimeout(timer)
   }, [studentId, onStreakUpdate])
 
   if (!question) return null

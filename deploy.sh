@@ -24,13 +24,24 @@ echo "✓ Docker and Docker Compose found"
 echo ""
 echo "Generating secure configuration values..."
 
-SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
-REDIS_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
+PYTHON_CMD="python3"
+if ! command -v python3 &> /dev/null; then
+    if command -v python &> /dev/null; then
+        PYTHON_CMD="python"
+    else
+        echo "❌ Python is not installed. Please install Python 3.10+ first."
+        exit 1
+    fi
+fi
+
+SECRET_KEY=$($PYTHON_CMD -c "import secrets; print(secrets.token_urlsafe(32))")
+DB_PASSWORD=$($PYTHON_CMD -c "import secrets; print(secrets.token_urlsafe(16))")
+REDIS_PASSWORD=$($PYTHON_CMD -c "import secrets; print(secrets.token_urlsafe(16))")
+SEED_PASSWORD=$($PYTHON_CMD -c "import secrets; print(secrets.token_urlsafe(16))")
 
 # Create .env file
 echo ""
-echo "Creating .env file..."
+echo "Creating .env file from template..."
 
 cp .env.docker .env
 
@@ -38,10 +49,9 @@ cp .env.docker .env
 sed -i "s|FORGR_SECRET_KEY=.*|FORGR_SECRET_KEY=${SECRET_KEY}|" .env
 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
 sed -i "s|REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|" .env
-sed -i "s|FORGR_DATABASE_URL=.*|FORGR_DATABASE_URL=postgresql://forgr:${DB_PASSWORD}@db:5432/forgr_prod|" .env
-sed -i "s|FORGR_REDIS_URL=.*|FORGR_REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0|" .env
+sed -i "s|FORGR_SEED_PASSWORD=.*|FORGR_SEED_PASSWORD=${SEED_PASSWORD}|" .env
 
-echo "✓ .env file created with secure values"
+echo "✓ .env file created with secure generated secrets"
 
 # Prompt for domain and CORS origins
 echo ""
@@ -52,7 +62,7 @@ DOMAIN=${DOMAIN:-localhost}
 if [ "${DOMAIN}" != "localhost" ]; then
     CORS_ORIGINS="https://${DOMAIN},https://www.${DOMAIN}"
     sed -i "s|FORGR_CORS_ORIGINS=.*|FORGR_CORS_ORIGINS=${CORS_ORIGINS}|" .env
-    sed -i "s|VITE_API_URL=.*|VITE_API_URL=https://api.${DOMAIN}|" .env
+    sed -i "s|VITE_API_BASE_URL=.*|VITE_API_BASE_URL=https://api.${DOMAIN}|" .env
 fi
 
 # Start services

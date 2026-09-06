@@ -1,44 +1,52 @@
-import { ReactElement } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, type AuthContextValue } from '../context/auth-context';
+import type { UserSession } from '../types/auth';
 
 // Mock user for testing
-export const mockUser = {
-  id: 'test-user-1',
+export const mockUser: UserSession = {
+  token: 'test-token-123',
   email: 'test@example.com',
-  role: 'student' as const,
+  role: 'student',
   name: 'Test User',
+  studentId: '1001',
 };
 
 // Mock auth context value
-export const mockAuthContextValue = {
-  user: mockUser,
-  isAuthenticated: true,
-  login: async () => {},
-  logout: async () => {},
-  register: async () => {},
-  refreshToken: async () => {},
-  loading: false,
-  error: null,
+export const mockAuthContextValue: AuthContextValue = {
+  session: mockUser,
+  login: async () => mockUser,
+  logout: () => {},
 };
+
+export const mockLoggedOutAuthContextValue: AuthContextValue = {
+  session: null,
+  login: async () => mockUser,
+  logout: () => {},
+};
+
+import { ThemeProvider } from '../context/ThemeContext';
 
 // Custom render function that includes providers
 export function renderWithProviders(
   ui: ReactElement,
   {
-    authValue = mockAuthContextValue,
+    authValue = mockLoggedOutAuthContextValue,
     ...renderOptions
   }: {
-    authValue?: any;
+    authValue?: AuthContextValue;
   } & Omit<RenderOptions, 'wrapper'> = {}
 ) {
   function Wrapper({ children }: { children: ReactElement }) {
     return (
       <BrowserRouter>
-        <AuthContext.Provider value={authValue}>
-          {children}
-        </AuthContext.Provider>
+        <ThemeProvider>
+          <AuthContext.Provider value={authValue}>
+            {children}
+          </AuthContext.Provider>
+        </ThemeProvider>
       </BrowserRouter>
     );
   }

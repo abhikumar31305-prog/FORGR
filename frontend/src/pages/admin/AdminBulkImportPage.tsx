@@ -171,8 +171,8 @@ export function AdminBulkImportPage() {
       })
       setCustomMappings(initMap)
 
-      // Set target profiles to at least the count of uploaded rows or current limit
-      const detectedCount = Math.max(500, preview.total_rows)
+      // Capacity must cover existing profiles plus the incoming cohort.
+      const detectedCount = Math.max(500, (subStatus?.current_profiles ?? 0) + preview.total_rows)
       setTargetProfiles(detectedCount)
 
       // If subscription expired or quota will be exceeded, prompt subscription immediately
@@ -184,7 +184,7 @@ export function AdminBulkImportPage() {
       ) {
         setShowSubModal(true)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Validation failed. Please verify file format.'
       setErrorMessage(msg)
       if (msg.includes('402') || msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('quota')) {
@@ -214,7 +214,7 @@ export function AdminBulkImportPage() {
       )
       setFinalReport(result)
       void getSubscriptionStatus().then(setSubStatus).catch(() => null)
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Execution failed during database import.'
       setErrorMessage(msg)
       if (
@@ -237,16 +237,14 @@ export function AdminBulkImportPage() {
       // 1. Create order on backend
       const orderData = await createRazorpayOrder('custom', selectedBillingCycle, targetProfiles)
 
-      // 2. Load script
-      const scriptLoaded = await loadRazorpayScript()
-      if (!scriptLoaded || !(window as any).Razorpay) {
-        // Fallback to sandbox simulation
-        await simulateTestSubscription('custom', selectedBillingCycle, targetProfiles)
+      // 2. Simulations still exercise the backend verification contract.
+      if (orderData.is_simulation) {
+        await verifyPayment(orderData.order_id, `pay_sim_${crypto.randomUUID()}`, `sim_sig_${orderData.order_id}`)
         const updated = await getSubscriptionStatus()
         setSubStatus(updated)
         setPaymentNotice({
           type: 'success',
-          text: `Payment simulated successfully! Subscribed for ${targetProfiles.toLocaleString()} profiles.`,
+          text: `Payment simulation completed. Subscribed for ${targetProfiles.toLocaleString()} profiles.`,
         })
         setTimeout(() => {
           setShowSubModal(false)
@@ -255,10 +253,16 @@ export function AdminBulkImportPage() {
         return
       }
 
-      // 3. Launch Razorpay modal
+      // 3. Live mode requires the real checkout SDK; never silently simulate it.
+      const scriptLoaded = await loadRazorpayScript()
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error('Razorpay checkout could not load. Check network policy or ad-blocking and try again.')
+      }
+
+      // 4. Launch Razorpay modal
       const options = {
         key: orderData.key_id,
-        amount: orderData.amount,
+        amount: orderData.amount_paise,
         currency: orderData.currency,
         name: 'FORGR Academic Intelligence',
         description: `Institutional Subscription - ${targetProfiles.toLocaleString()} Profiles (${selectedBillingCycle})`,
@@ -287,10 +291,10 @@ export function AdminBulkImportPage() {
               setShowSubModal(false)
               setPaymentNotice(null)
             }, 1800)
-          } catch (vErr: any) {
+          } catch (vErr: unknown) {
             setPaymentNotice({
               type: 'error',
-              text: vErr?.message || 'Payment verification failed. Please contact support.',
+              text: vErr instanceof Error ? vErr.message : 'Payment verification failed. Please contact support.',
             })
           }
         },
@@ -301,8 +305,9 @@ export function AdminBulkImportPage() {
         },
       }
 
-      const rzp = new (window as any).Razorpay(options)
-      rzp.on('payment.failed', (resp: any) => {
+      if (!window.Razorpay) return
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', (resp: { error?: { description?: string } }) => {
         setPaymentNotice({
           type: 'error',
           text: `Payment failed: ${resp.error?.description || 'Transaction declined'}`,
@@ -310,26 +315,11 @@ export function AdminBulkImportPage() {
         setIsProcessingPayment(false)
       })
       rzp.open()
-    } catch (err: any) {
-      // If error (e.g. razorpay keys placeholder), fallback to sandbox simulation
-      try {
-        await simulateTestSubscription('custom', selectedBillingCycle, targetProfiles)
-        const updated = await getSubscriptionStatus()
-        setSubStatus(updated)
-        setPaymentNotice({
-          type: 'success',
-          text: `Sandbox activation complete! Managed profiles upgraded to ${targetProfiles.toLocaleString()}.`,
-        })
-        setTimeout(() => {
-          setShowSubModal(false)
-          setPaymentNotice(null)
-        }, 1800)
-      } catch (simErr: any) {
-        setPaymentNotice({
-          type: 'error',
-          text: err?.message || 'Unable to initiate payment.',
-        })
-      }
+    } catch (err: unknown) {
+      setPaymentNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Unable to initiate payment.',
+      })
     } finally {
       setIsProcessingPayment(false)
     }
@@ -350,10 +340,10 @@ export function AdminBulkImportPage() {
         setShowSubModal(false)
         setPaymentNotice(null)
       }, 1500)
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPaymentNotice({
         type: 'error',
-        text: err?.message || 'Sandbox activation failed.',
+        text: err instanceof Error ? err.message : 'Sandbox activation failed.',
       })
     } finally {
       setIsProcessingPayment(false)
@@ -467,7 +457,7 @@ export function AdminBulkImportPage() {
               type="button"
               onClick={() => {
                 if (validationResult) {
-                  setTargetProfiles(Math.max(500, validationResult.total_rows))
+                  setTargetProfiles(Math.max(500, (subStatus?.current_profiles ?? 0) + validationResult.total_rows))
                 }
                 setShowSubModal(true)
               }}
@@ -828,7 +818,7 @@ export function AdminBulkImportPage() {
             <button
               type="button"
               onClick={() => {
-                setTargetProfiles(Math.max(500, validationResult.total_rows))
+                setTargetProfiles(Math.max(500, (subStatus?.current_profiles ?? 0) + validationResult.total_rows))
                 setShowSubModal(true)
               }}
               className="button"

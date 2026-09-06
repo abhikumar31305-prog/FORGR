@@ -31,20 +31,34 @@ logger = logging.getLogger("forgr.billing")
 
 router = APIRouter(prefix="/api/billing", tags=["Billing & Subscriptions"])
 
-# Configuration (defaults to test / sandbox simulator when keys are unset)
+APP_ENV = os.getenv("FORGR_ENV", "development").lower()
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_forgr_demo")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "forgr_secret_test_key_123")
 IS_SIMULATION_MODE = not os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY_ID", "").startswith("rzp_test_forgr_demo")
+ALLOW_SIMULATION_IN_PROD = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes")
+
+if APP_ENV == "production" and IS_SIMULATION_MODE and not ALLOW_SIMULATION_IN_PROD:
+    raise RuntimeError(
+        "Production billing requires real Razorpay credentials. "
+        "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your environment, "
+        "or set FORGR_ALLOW_BILLING_SIMULATION=true for sandbox/pilot deployments."
+    )
 
 # ── Plan Specifications (in INR ₹) ───────────────────────────────────
+USD_TO_INR = 83.0
+
+# ── Plan Specifications (aligned with Landing Page pricing calculator) ─
 PRICING_TIERS: Dict[str, Dict[str, Any]] = {
     "starter": {
         "id": "starter",
-        "name": "Departmental Starter",
+        "name": "Departmental Pilot",
         "description": "Ideal for single departments or pilot institutional deployments.",
         "profile_limit": 500,
-        "monthly_price_inr": 4999,
-        "yearly_price_inr": 47990,  # 20% off
+        "base_rate_usd": 1.50,
+        "monthly_price_usd": 750,
+        "yearly_price_usd": 7200,
+        "monthly_price_inr": int(round(750 * USD_TO_INR)),
+        "yearly_price_inr": int(round(7200 * USD_TO_INR)),
         "features": [
             "Up to 500 Managed Student Profiles",
             "Master CSV Bulk Import & Validation",
@@ -55,12 +69,15 @@ PRICING_TIERS: Dict[str, Dict[str, Any]] = {
     },
     "growth": {
         "id": "growth",
-        "name": "Campus Growth",
-        "description": "Engineered for medium to large colleges scaling placement readiness.",
+        "name": "Campus Volume Tier",
+        "description": "Campus volume tier for medium to large colleges scaling placement readiness.",
         "profile_limit": 2500,
-        "monthly_price_inr": 14999,
-        "yearly_price_inr": 143990,  # 20% off
         "popular": True,
+        "base_rate_usd": 1.20,
+        "monthly_price_usd": 3000,
+        "yearly_price_usd": 28800,
+        "monthly_price_inr": int(round(3000 * USD_TO_INR)),
+        "yearly_price_inr": int(round(28800 * USD_TO_INR)),
         "features": [
             "Up to 2,500 Managed Student Profiles",
             "Unlimited Bulk Data Synchronizations",
@@ -72,11 +89,14 @@ PRICING_TIERS: Dict[str, Dict[str, Any]] = {
     },
     "enterprise": {
         "id": "enterprise",
-        "name": "University Enterprise",
+        "name": "University Enterprise Tier",
         "description": "Full-scale university coverage with unlimited cohorts and custom SLAs.",
         "profile_limit": 10000,
-        "monthly_price_inr": 29999,
-        "yearly_price_inr": 287990,  # 20% off
+        "base_rate_usd": 0.90,
+        "monthly_price_usd": 9000,
+        "yearly_price_usd": 86400,
+        "monthly_price_inr": int(round(9000 * USD_TO_INR)),
+        "yearly_price_inr": int(round(86400 * USD_TO_INR)),
         "features": [
             "Up to 10,000 Managed Student Profiles",
             "Multi-Department Federation & Custom Roles",
@@ -90,26 +110,42 @@ PRICING_TIERS: Dict[str, Dict[str, Any]] = {
 
 
 def calculate_custom_pricing(profiles: int, billing_cycle: str = "monthly") -> Dict[str, Any]:
-    """Calculates price for arbitrary profile volumes."""
-    profiles = max(100, profiles)
+    """Calculates price for arbitrary profile volumes referencing the Landing Page pricing model:
+    - profiles <= 500: $1.50 / profile / mo ('Departmental pilot')
+    - profiles <= 2500: $1.20 / profile / mo ('Campus volume discount')
+    - profiles > 2500: $0.90 / profile / mo ('University enterprise tier')
+    - Annual / Yearly billing: 20% discount
+    """
+    profiles = max(10, profiles)
     if profiles <= 500:
-        rate = 12.0
+        base_rate_usd = 1.50
+        tier_tag = "Departmental pilot"
     elif profiles <= 2500:
-        rate = 8.0
+        base_rate_usd = 1.20
+        tier_tag = "Campus volume discount"
     else:
-        rate = 5.0
+        base_rate_usd = 0.90
+        tier_tag = "University enterprise tier"
 
-    monthly = int(round(profiles * rate))
-    if billing_cycle == "yearly":
-        total = int(round(monthly * 12 * 0.8))  # 20% annual discount
-    else:
-        total = monthly
+    effective_rate_usd = base_rate_usd * 0.8 if billing_cycle == "yearly" else base_rate_usd
+    monthly_usd = int(round(profiles * effective_rate_usd))
+    total_usd = monthly_usd * 12 if billing_cycle == "yearly" else monthly_usd
+
+    total_inr = int(round(total_usd * USD_TO_INR))
+    effective_rate_inr = round(effective_rate_usd * USD_TO_INR, 2)
 
     return {
         "profiles": profiles,
         "billing_cycle": billing_cycle,
-        "rate_per_profile": rate * (0.8 if billing_cycle == "yearly" else 1.0),
-        "total_amount_inr": total,
+        "base_rate_usd": base_rate_usd,
+        "effective_rate_usd": effective_rate_usd,
+        "monthly_usd": monthly_usd,
+        "total_usd": total_usd,
+        "rate_per_profile_usd": effective_rate_usd,
+        "rate_per_profile_inr": effective_rate_inr,
+        "rate_per_profile": effective_rate_inr,
+        "total_amount_inr": total_inr,
+        "tier_tag": tier_tag,
     }
 
 
@@ -292,9 +328,13 @@ async def create_razorpay_order(
                 if res.status_code == 200:
                     razorpay_order_id = res.json().get("id", "")
                 else:
-                    logger.warning(f"Razorpay live order API failed: {res.text}. Falling back to simulation.")
+                    logger.error("Razorpay order creation failed: %s", res.text)
+                    raise HTTPException(status_code=502, detail="Payment provider could not create the order.")
         except Exception as e:
-            logger.warning(f"Exception contacting Razorpay: {e}. Falling back to simulation.")
+            if isinstance(e, HTTPException):
+                raise
+            logger.exception("Razorpay order creation failed")
+            raise HTTPException(status_code=502, detail="Payment provider is unavailable.") from e
 
     # Fallback to simulated order ID if in dev/simulation or offline
     if not razorpay_order_id:
@@ -342,6 +382,12 @@ def verify_payment_and_activate_subscription(
 
     if not tx:
         raise HTTPException(status_code=404, detail="Order reference not found in database.")
+    if tx.admin_email != current_user.email:
+        raise HTTPException(status_code=404, detail="Order reference not found in database.")
+    if tx.status == "captured":
+        raise HTTPException(status_code=409, detail="Payment has already been verified.")
+    if tx.status != "created":
+        raise HTTPException(status_code=409, detail="Payment transaction is not pending verification.")
 
     # Validate signature
     is_valid = verify_razorpay_signature(req.razorpay_order_id, req.razorpay_payment_id, req.razorpay_signature)

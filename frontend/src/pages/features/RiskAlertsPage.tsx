@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { useAuth } from '../../context/useAuth'
@@ -10,6 +10,7 @@ import {
   getBacklogPrediction,
   type AiGuidanceRoadmap,
   type RiskSimulationResult,
+  type MlRiskDetails,
 } from '../../services/featureApi'
 import type { RiskRecord } from '../../types/domain'
 
@@ -17,7 +18,7 @@ export function RiskAlertsPage() {
   const { session } = useAuth()
   const [selectedStudentId, setSelectedStudentId] = useState(session?.studentId || '1001')
   const [risk, setRisk] = useState<RiskRecord | null>(null)
-  const [mlDetails, setMlDetails] = useState<any | null>(null)
+  const [mlDetails, setMlDetails] = useState<MlRiskDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -99,7 +100,7 @@ export function RiskAlertsPage() {
   }
 
   // Handle Real-Time Simulation
-  const handleRunSimulation = async () => {
+  const handleRunSimulation = useCallback(async () => {
     setIsSimulating(true)
     try {
       const res = await simulateRiskOutcome({
@@ -117,7 +118,7 @@ export function RiskAlertsPage() {
     } finally {
       setIsSimulating(false)
     }
-  }
+  }, [simAttendance, simCgpa, simBacklogs, simCoding, simProjects])
 
   // Auto-run simulation on slider change with debounce
   useEffect(() => {
@@ -125,7 +126,7 @@ export function RiskAlertsPage() {
       void handleRunSimulation()
     }, 250)
     return () => clearTimeout(timer)
-  }, [simAttendance, simCgpa, simBacklogs, simCoding, simProjects])
+  }, [handleRunSimulation])
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault()

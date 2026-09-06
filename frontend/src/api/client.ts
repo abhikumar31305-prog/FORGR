@@ -1,4 +1,4 @@
-const CONFIGURED_API_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+const CONFIGURED_API_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const SESSION_STORAGE_KEY = 'forgr_user_session'
 
 let accessToken = ''

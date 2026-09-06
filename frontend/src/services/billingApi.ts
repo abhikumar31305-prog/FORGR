@@ -4,6 +4,25 @@
 
 import { apiRequest } from '../api/client'
 
+export interface RazorpayInstance {
+  open: () => void
+  on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayInstance
+  }
+}
+
+export interface SimulatedSubscriptionResponse {
+  status: string
+  plan_id: string
+  subscription_status: string
+  profile_limit: number
+  expires_at: string | null
+}
+
 export interface BillingPlan {
   id: string
   name: string
@@ -113,7 +132,7 @@ export async function simulateTestSubscription(
   billingCycle: 'monthly' | 'yearly' = 'yearly',
   profileLimit: number = 2500,
   expireNow: boolean = false,
-): Promise<any> {
+): Promise<SimulatedSubscriptionResponse> {
   return apiRequest('/api/billing/simulate-test-subscription', {
     method: 'POST',
     body: JSON.stringify({
@@ -147,14 +166,39 @@ export function calculateCustomPlanPrice(profiles: number, billingCycle: 'monthl
   monthly: number
   total: number
   rate: number
+  baseRateUsd: number
+  effectiveRateUsd: number
+  totalUsd: number
+  monthlyUsd: number
+  tierTag: string
 } {
-  const count = Math.max(100, profiles)
-  let rate = 12.0
-  if (count > 2500) rate = 5.0
-  else if (count > 500) rate = 8.0
+  const count = Math.max(10, profiles)
+  const baseRateUsd = count <= 500 ? 1.50 : count <= 2500 ? 1.20 : 0.90
+  const tierTag =
+    count <= 500
+      ? 'Departmental pilot'
+      : count <= 2500
+      ? 'Campus volume discount'
+      : 'University enterprise tier'
 
-  const monthly = Math.round(count * rate)
-  const total = billingCycle === 'yearly' ? Math.round(monthly * 12 * 0.8) : monthly
-  return { monthly, total, rate: billingCycle === 'yearly' ? rate * 0.8 : rate }
+  const effectiveRateUsd = billingCycle === 'yearly' ? baseRateUsd * 0.8 : baseRateUsd
+  const monthlyUsd = Math.round(count * effectiveRateUsd)
+  const totalUsd = billingCycle === 'yearly' ? monthlyUsd * 12 : monthlyUsd
+
+  const USD_TO_INR = 83.0
+  const totalInr = Math.round(totalUsd * USD_TO_INR)
+  const monthlyInr = Math.round(monthlyUsd * USD_TO_INR)
+  const rateInr = Math.round(effectiveRateUsd * USD_TO_INR * 100) / 100
+
+  return {
+    monthly: monthlyInr,
+    total: totalInr,
+    rate: rateInr,
+    baseRateUsd,
+    effectiveRateUsd,
+    totalUsd,
+    monthlyUsd,
+    tierTag,
+  }
 }
 

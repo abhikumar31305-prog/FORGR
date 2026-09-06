@@ -12,6 +12,7 @@ Tests cover:
 import os
 import sys
 import json
+import uuid
 import pytest
 from io import BytesIO
 from fastapi.testclient import TestClient
@@ -52,9 +53,6 @@ class TestAuthentication:
         self.client = TestClient(app)
         db = SessionLocal()
         try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
             db.query(models.LoginAuditLog).delete()
             db.commit()
         finally:
@@ -140,15 +138,6 @@ class TestRoleBasedAccessControl:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.client = TestClient(app)
-        db = SessionLocal()
-        try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
-            db.commit()
-        finally:
-            db.close()
-
         self.tokens = {}
         users = {
             "admin": "admin@forgr.app",
@@ -224,15 +213,6 @@ class TestCSVImport:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.client = TestClient(app)
-        db = SessionLocal()
-        try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
-            db.commit()
-        finally:
-            db.close()
-
         data = _login(self.client, "admin@forgr.app")
         self.admin_token = data["access_token"]
 
@@ -315,15 +295,6 @@ class TestAPIEndpoints:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.client = TestClient(app)
-        db = SessionLocal()
-        try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
-            db.commit()
-        finally:
-            db.close()
-
         data = _login(self.client, "admin@forgr.app")
         self.admin_token = data["access_token"]
 
@@ -390,15 +361,6 @@ class TestDataValidation:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.client = TestClient(app)
-        db = SessionLocal()
-        try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
-            db.commit()
-        finally:
-            db.close()
-
         data = _login(self.client, "admin@forgr.app")
         self.admin_token = data["access_token"]
 
@@ -435,12 +397,13 @@ class TestDataValidation:
 
     def test_xss_in_student_name(self):
         """Test XSS payload in student name is stored as-is (sanitized at rendering)"""
+        uid = uuid.uuid4().hex[:6]
         response = self.client.post(
             "/students",
             json={
-                "student_id": "XSS001",
+                "student_id": f"XSS_{uid}",
                 "name": "<script>alert('xss')</script>",
-                "email": "xss@example.com",
+                "email": f"xss_{uid}@example.com",
                 "department": "CSE",
                 "year": 2,
             },
@@ -461,10 +424,6 @@ class TestIDORVulnerabilities:
         self.client = TestClient(app)
         db = SessionLocal()
         try:
-            crud.seed_default_auth_users(db)
-            for user in db.query(models.User).all():
-                user.password_hash = crud.hash_password(TEST_PASSWORD)
-
             # Ensure test students exist
             for sid, name, email in [
                 ("IDOR001", "Student One", "idor1@test.com"),
@@ -487,7 +446,16 @@ class TestIDORVulnerabilities:
             student_user = db.query(models.User).filter_by(
                 email="student1@forgr.app"
             ).first()
-            if student_user and student_rec:
+            if not student_user:
+                student_user = models.User(
+                    email="student1@forgr.app",
+                    password_hash=crud.hash_password(TEST_PASSWORD),
+                    role="student",
+                    linked_profile_id=student_rec.id if student_rec else None,
+                )
+                db.add(student_user)
+                db.commit()
+            elif student_rec:
                 student_user.linked_profile_id = student_rec.id
                 db.commit()
         finally:

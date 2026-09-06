@@ -28,8 +28,8 @@ def seed_test_users():
     db = SessionLocal()
     try:
         crud.seed_default_auth_users(db)
-        for user in db.query(models.User).all():
-            user.password_hash = crud.hash_password(TEST_PASSWORD)
+        hashed = crud.hash_password(TEST_PASSWORD)
+        db.query(models.User).update({models.User.password_hash: hashed}, synchronize_session=False)
         db.query(models.LoginAuditLog).delete()
         db.commit()
     finally:

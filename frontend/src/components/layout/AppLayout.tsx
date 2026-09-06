@@ -66,14 +66,6 @@ const HistoryIcon = () => (
   </svg>
 )
 
-const BillingIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
-    <rect x="2" y="5" width="20" height="14" rx="2" />
-    <line x1="2" y1="10" x2="22" y2="10" />
-    <line x1="6" y1="15" x2="10" y2="15" />
-  </svg>
-)
-
 const SettingsIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="18" height="18">
     <circle cx="12" cy="12" r="3" />

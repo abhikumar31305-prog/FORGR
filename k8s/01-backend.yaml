@@ -80,7 +80,7 @@ spec:
         command:
           - sh
           - -c
-          - alembic upgrade head || true
+          - alembic upgrade head
         envFrom:
         - configMapRef:
             name: forgr-config

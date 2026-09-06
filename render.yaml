@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: forgr-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: sh -c "python -m alembic upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: PYTHONPATH
+        value: backend
+      - key: FORGR_ENV
+        value: production
+      - key: FORGR_SECRET_KEY
+        generateValue: true
+      - key: FORGR_SEED_PASSWORD
+        generateValue: true
+      - key: FORGR_ALLOW_BILLING_SIMULATION
+        value: "true"
+      - key: FORGR_DATABASE_URL
+        fromDatabase:
+          name: forgr-db
+          property: connectionString
+      - key: FORGR_CORS_ORIGINS
+        value: "https://*.vercel.app,http://localhost:5173"
+      - key: FORGR_ALLOWED_HOSTS
+        value: "*"
+
+databases:
+  - name: forgr-db
+    plan: free
+    region: oregon
+    databaseName: forgr_prod
+    user: forgr_user

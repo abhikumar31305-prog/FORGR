@@ -26,7 +26,27 @@ export function AdminAuditLogsPage() {
   }
 
   useEffect(() => {
-    void loadLogs()
+    let active = true
+    const fetchLogs = async () => {
+      try {
+        const records = await getAdminAuditLogs(150, actionFilter, tableFilter, '')
+        if (active) {
+          setLogs(records)
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Failed to retrieve system audit logs.')
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false)
+        }
+      }
+    }
+    void fetchLogs()
+    return () => {
+      active = false
+    }
   }, [actionFilter, tableFilter])
 
   const handleSearchSubmit = (e: React.FormEvent) => {

@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '002_model_versioning'
-down_revision = None  # Set to actual previous revision ID when running
+down_revision = '001_initial_schema'
 branch_labels = None
 depends_on = None
 

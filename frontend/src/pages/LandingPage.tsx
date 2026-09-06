@@ -30,8 +30,10 @@ const AnimatedCounter: React.FC<CounterProps> = ({
   useEffect(() => {
     if (!isInView) return
     if (shouldReduceMotion) {
-      setDisplayValue(to)
-      return
+      const timer = setTimeout(() => {
+        setDisplayValue(to)
+      }, 0)
+      return () => clearTimeout(timer)
     }
 
     const controls = animate(from, to, {

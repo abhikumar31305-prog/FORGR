@@ -13,13 +13,7 @@ import {
   type TransactionItem,
 } from '../../services/billingApi'
 import { SectionCard } from '../../components/ui/SectionCard'
-import { StatCard } from '../../components/ui/StatCard'
 
-declare global {
-  interface Window {
-    Razorpay?: any
-  }
-}
 
 export function AdminBillingPage() {
   const [plans, setPlans] = useState<BillingPlan[]>([])
@@ -27,7 +21,7 @@ export function AdminBillingPage() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([])
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly')
   const [customProfiles, setCustomProfiles] = useState(1200)
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
@@ -52,8 +46,30 @@ export function AdminBillingPage() {
   }
 
   useEffect(() => {
-    void loadData()
+    let active = true
+    const init = async () => {
+      try {
+        const [plansRes, statusRes, txRes] = await Promise.all([
+          getBillingPlans(),
+          getSubscriptionStatus(),
+          getPaymentTransactions(),
+        ])
+        if (!active) return
+        setPlans(plansRes.plans)
+        setStatus(statusRes)
+        setTransactions(txRes)
+      } catch (err) {
+        if (!active) return
+        setError(err instanceof Error ? err.message : 'Failed to retrieve billing and subscription status.')
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    }
+    void init()
     void loadRazorpayScript()
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleSubscribe = async (planId: string, profileCount?: number) => {
@@ -65,8 +81,23 @@ export function AdminBillingPage() {
       // 1. Create order on backend
       const order = await createRazorpayOrder(planId, billingCycle, profileCount)
 
-      // 2. If Razorpay SDK is loaded and in live mode, open popup
-      if (window.Razorpay && !order.is_simulation) {
+      // 2. Simulations still exercise the backend verification contract.
+      if (order.is_simulation) {
+        const simPaymentId = `pay_sim_${crypto.randomUUID()}`
+        const simSignature = `sim_sig_${order.order_id}`
+        const res = await verifyPayment(order.order_id, simPaymentId, simSignature)
+        setSuccessMessage(`Razorpay simulation completed. ${res.message}`)
+        await loadData()
+        return
+      }
+
+      // 3. Live mode requires the real checkout SDK; never silently simulate it.
+      const scriptLoaded = await loadRazorpayScript()
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error('Razorpay checkout could not load. Check network policy or ad-blocking and try again.')
+      }
+
+      if (window.Razorpay) {
         const options = {
           key: order.key_id,
           amount: order.amount_paise,
@@ -74,7 +105,11 @@ export function AdminBillingPage() {
           name: 'FORGR Platform',
           description: `Subscription: ${planId.toUpperCase()} (${billingCycle.toUpperCase()}) - ${order.profile_limit} Profiles`,
           order_id: order.order_id,
-          handler: async (response: any) => {
+          handler: async (response: {
+            razorpay_order_id: string
+            razorpay_payment_id: string
+            razorpay_signature: string
+          }) => {
             try {
               const res = await verifyPayment(
                 response.razorpay_order_id,
@@ -96,13 +131,6 @@ export function AdminBillingPage() {
         }
         const rzp = new window.Razorpay(options)
         rzp.open()
-      } else {
-        // Simulation mode (dev sandbox): automatically verify simulated order
-        const simPaymentId = `pay_sim_${Date.now().toString(36)}`
-        const simSignature = `sim_sig_${order.order_id}`
-        const res = await verifyPayment(order.order_id, simPaymentId, simSignature)
-        setSuccessMessage(`✓ Razorpay Payment Simulated Successfully! ${res.message}`)
-        await loadData()
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initiate Razorpay subscription.')

@@ -147,6 +147,24 @@ export async function simulateRiskOutcome(
   })
 }
 
-export async function getBacklogPrediction(studentId: string): Promise<any> {
-  return apiRequest<any>(`/api/backlog/student/${studentId}`)
+export interface MlRiskDetails {
+  input_features?: {
+    attendance_percentage?: number
+    cgpa?: number
+    backlogs?: number
+    coding_score?: number
+    projects?: number
+    [key: string]: unknown
+  }
+  probabilities?: {
+    High?: number
+    Medium?: number
+    Low?: number
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+export async function getBacklogPrediction(studentId: string): Promise<MlRiskDetails> {
+  return apiRequest<MlRiskDetails>(`/api/backlog/student/${studentId}`)
 }

@@ -82,31 +82,10 @@ logger.info(f"FORGR API starting in {ENV} environment", extra={"env": ENV})
 
 # ════════════════════════════════════════════════════════════════
 # DATABASE INITIALIZATION
+# Schema is managed exclusively by Alembic (run via startCommand).
+# Do NOT call Base.metadata.create_all here — it conflicts with Alembic
+# and will attempt DDL before migrations have run.
 # ════════════════════════════════════════════════════════════════
-Base.metadata.create_all(bind=engine)
-
-def _ensure_schema_compatibility(db_engine):
-    """Ensure database schema includes newly introduced columns across migrations."""
-    from sqlalchemy import inspect, text
-    inspector = inspect(db_engine)
-    if "risk_predictions" in inspector.get_table_names():
-        existing_cols = {c["name"] for c in inspector.get_columns("risk_predictions")}
-        # Use TIMESTAMP (PostgreSQL/SQLite compatible) instead of DATETIME (SQLite-only)
-        db_dialect = db_engine.dialect.name
-        ts_type = "TIMESTAMP" if db_dialect == "postgresql" else "DATETIME"
-        cols_to_add = [
-            ("model_version", "VARCHAR(32) DEFAULT 'v1.0.0'"),
-            ("model_name", "VARCHAR(64) DEFAULT 'ensemble_risk_predictor'"),
-            ("confidence", "FLOAT DEFAULT 0.85"),
-            ("predicted_at", ts_type),
-        ]
-        with db_engine.begin() as conn:
-            for col_name, col_type in cols_to_add:
-                if col_name not in existing_cols:
-                    conn.execute(text(f"ALTER TABLE risk_predictions ADD COLUMN {col_name} {col_type}"))
-                    logger.info(f"Added column {col_name} to risk_predictions table")
-
-_ensure_schema_compatibility(engine)
 
 with SessionLocal() as seed_db:
     crud.seed_default_auth_users(seed_db)

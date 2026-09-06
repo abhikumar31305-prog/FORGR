@@ -225,7 +225,7 @@ export function AdminBulkImportPage() {
 
       {/* ── Category Selector Grid ── */}
       <SectionCard title="1. Select Import Category" subtitle="Choose the institutional data domain you are uploading:">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem', marginTop: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem', marginTop: '0.5rem' }}>
           {IMPORT_CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat.type
             return (
@@ -304,11 +304,13 @@ export function AdminBulkImportPage() {
           style={{
             border: isDragging ? '2px dashed var(--accent)' : '2px dashed var(--border)',
             borderRadius: '12px',
-            padding: '2.5rem 1.5rem',
+            padding: '2rem 1.25rem',
             textAlign: 'center',
             background: isDragging ? 'rgba(255, 107, 53, 0.05)' : 'var(--surface-subtle)',
             transition: 'all 0.2s ease',
             cursor: 'pointer',
+            boxSizing: 'border-box',
+            maxWidth: '100%',
           }}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => {
@@ -398,7 +400,7 @@ export function AdminBulkImportPage() {
 
           {/* ── Column Mapping Card ── */}
           <SectionCard title="3. Intelligent Column Mapping" subtitle="Verify detected CSV headers mapped to FORGR institutional fields:">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.8rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginTop: '0.5rem' }}>
               {validationResult.mappings.map((m) => (
                 <div
                   key={m.detected_column}
@@ -429,12 +431,21 @@ export function AdminBulkImportPage() {
 
           {/* ── Record Preview Table ── */}
           <SectionCard title="4. Sample Record Preview (First 5 Rows)" subtitle="Data records parsed with mapped attributes:">
-            <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-              <table className="table" style={{ width: '100%', fontSize: '0.85rem' }}>
+            <div style={{
+              overflowX: 'auto',
+              marginTop: '0.5rem',
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              WebkitOverflowScrolling: 'touch',
+              borderRadius: '8px',
+              border: '1px solid var(--border)'
+            }}>
+              <table className="table" style={{ width: '100%', fontSize: '0.84rem', whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr>
                     {Object.keys(validationResult.preview_records[0] || {}).map((col) => (
-                      <th key={col} style={{ padding: '0.6rem 0.8rem', textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-subtle)' }}>
+                      <th key={col} style={{ padding: '0.6rem 0.8rem', textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
                         {col}
                       </th>
                     ))}
@@ -444,7 +455,7 @@ export function AdminBulkImportPage() {
                   {validationResult.preview_records.slice(0, 5).map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                       {Object.values(row).map((val, cIdx) => (
-                        <td key={cIdx} style={{ padding: '0.6rem 0.8rem', color: 'var(--text)' }}>
+                        <td key={cIdx} style={{ padding: '0.6rem 0.8rem', color: 'var(--text)', whiteSpace: 'nowrap' }}>
                           {String(val ?? '—')}
                         </td>
                       ))}
@@ -512,7 +523,7 @@ export function AdminBulkImportPage() {
 
           {/* ── Step 5: Import Mode Selection & Execution ── */}
           <SectionCard title="5. Import Mode & Confirmation" subtitle="Choose synchronization strategy before committing records to the database:">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.25rem' }}>
               {[
                 { mode: 'upsert' as const, title: 'C. UPSERT (Recommended)', desc: 'Creates new records and updates existing student records.' },
                 { mode: 'create' as const, title: 'A. CREATE ONLY', desc: 'Inserts only new records; skips any existing duplicates.' },

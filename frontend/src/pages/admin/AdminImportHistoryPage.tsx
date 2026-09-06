@@ -95,25 +95,34 @@ export function AdminImportHistoryPage() {
             <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem' }}>Uploaded batches will appear here with detailed records and error downloads.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-            <table className="table" style={{ width: '100%', fontSize: '0.86rem' }}>
+          <div style={{
+            overflowX: 'auto',
+            marginTop: '0.5rem',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            WebkitOverflowScrolling: 'touch',
+            borderRadius: '8px',
+            border: '1px solid var(--border)'
+          }}>
+            <table className="table" style={{ width: '100%', minWidth: '920px', fontSize: '0.84rem' }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Batch ID</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Date / Time</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Admin</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Dataset Type</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>File Name</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Mode</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Counts (Ins/Upd/Fail)</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Status</th>
-                  <th style={{ padding: '0.75rem 0.85rem', textAlign: 'right', color: 'var(--text-subtle)' }}>Actions</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Batch ID</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Date / Time</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Admin</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Dataset Type</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>File Name</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Mode</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Counts (Ins/Upd/Fail)</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Status</th>
+                  <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right', color: 'var(--text-subtle)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((record) => (
                   <tr key={record.id} style={{ borderBottom: '1px solid var(--line-soft)' }}>
-                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                    <td style={{ padding: '0.65rem 0.75rem' }}>
                       <span style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: '0.8rem',
@@ -127,13 +136,13 @@ export function AdminImportHistoryPage() {
                         {record.import_batch_id}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-subtle)', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-subtle)', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
                       {new Date(record.created_at).toLocaleString()}
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text)', fontWeight: 500 }}>
+                    <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text)', fontWeight: 500, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={record.admin_email}>
                       {record.admin_email}
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                    <td style={{ padding: '0.65rem 0.75rem' }}>
                       <span style={{
                         fontSize: '0.74rem',
                         fontWeight: 700,
@@ -147,10 +156,10 @@ export function AdminImportHistoryPage() {
                         {record.dataset_type.toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }} title={record.file_name}>
+                    <td style={{ padding: '0.65rem 0.75rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }} title={record.file_name}>
                       {record.file_name}
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                    <td style={{ padding: '0.65rem 0.75rem' }}>
                       <span style={{
                         fontSize: '0.74rem',
                         fontWeight: 600,
@@ -163,14 +172,14 @@ export function AdminImportHistoryPage() {
                         {record.import_mode.toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', whiteSpace: 'nowrap' }}>
                       <span style={{ color: 'var(--patina)', fontWeight: 600 }}>+{record.inserted_rows}</span>
                       <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
                       <span style={{ color: 'var(--amber)', fontWeight: 600 }}>~{record.updated_rows}</span>
                       <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
                       <span style={{ color: record.failed_rows > 0 ? '#ff5a5f' : 'var(--text-muted)', fontWeight: 600 }}>!{record.failed_rows}</span>
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                    <td style={{ padding: '0.65rem 0.75rem' }}>
                       <span
                         style={{
                           fontSize: '0.75rem',
@@ -208,8 +217,8 @@ export function AdminImportHistoryPage() {
                         {record.status}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                    <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', whiteSpace: 'nowrap' }}>
                         <button
                           type="button"
                           className="button"

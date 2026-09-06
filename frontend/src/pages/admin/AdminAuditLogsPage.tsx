@@ -128,8 +128,17 @@ export function AdminAuditLogsPage() {
             <p style={{ margin: 0, fontSize: '1rem' }}>No audit events found matching the criteria.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-            <table className="table" style={{ width: '100%', fontSize: '0.86rem' }}>
+          <div style={{
+            overflowX: 'auto',
+            marginTop: '0.5rem',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            WebkitOverflowScrolling: 'touch',
+            borderRadius: '8px',
+            border: '1px solid var(--border)'
+          }}>
+            <table className="table" style={{ width: '100%', minWidth: '880px', fontSize: '0.84rem' }}>
               <thead>
                 <tr>
                   <th style={{ padding: '0.7rem', textAlign: 'left', color: 'var(--text-subtle)' }}>Timestamp</th>

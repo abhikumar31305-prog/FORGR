@@ -142,3 +142,19 @@ export function loadRazorpayScript(): Promise<boolean> {
     document.body.appendChild(script)
   })
 }
+
+export function calculateCustomPlanPrice(profiles: number, billingCycle: 'monthly' | 'yearly'): {
+  monthly: number
+  total: number
+  rate: number
+} {
+  const count = Math.max(100, profiles)
+  let rate = 12.0
+  if (count > 2500) rate = 5.0
+  else if (count > 500) rate = 8.0
+
+  const monthly = Math.round(count * rate)
+  const total = billingCycle === 'yearly' ? Math.round(monthly * 12 * 0.8) : monthly
+  return { monthly, total, rate: billingCycle === 'yearly' ? rate * 0.8 : rate }
+}
+

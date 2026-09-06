@@ -103,7 +103,6 @@ function getNavItems(role: Role): NavEntry[] {
       { label: 'Overview', href: '/admin', icon: OverviewIcon },
       { label: 'Bulk Import', href: '/admin/bulk-import', icon: ImportIcon },
       { label: 'Import History', href: '/admin/import-history', icon: HistoryIcon },
-      { label: 'Billing & Plans', href: '/admin/billing', icon: BillingIcon },
       { label: 'Academics', href: '/features/academics', icon: AcademicsIcon },
       { label: 'Attendance', href: '/features/attendance', icon: AttendanceIcon },
       { label: 'Placement Readiness', href: '/features/placement', icon: PlacementIcon },

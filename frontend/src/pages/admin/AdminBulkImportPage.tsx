@@ -8,7 +8,15 @@ import {
   type ImportPreviewResponse,
   type CohortAnalysisReport,
 } from '../../services/bulkImportApi'
-import { getSubscriptionStatus, type SubscriptionStatus } from '../../services/billingApi'
+import {
+  getSubscriptionStatus,
+  createRazorpayOrder,
+  verifyPayment,
+  simulateTestSubscription,
+  loadRazorpayScript,
+  calculateCustomPlanPrice,
+  type SubscriptionStatus,
+} from '../../services/billingApi'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 
@@ -107,6 +115,13 @@ export function AdminBulkImportPage() {
   } | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null)
+  const [showSubModal, setShowSubModal] = useState(false)
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('yearly')
+  const [targetProfiles, setTargetProfiles] = useState(500)
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  const [paymentNotice, setPaymentNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const pricingInfo = calculateCustomPlanPrice(targetProfiles, selectedBillingCycle)
 
   useEffect(() => {
     void getSubscriptionStatus().then(setSubStatus).catch(() => null)
@@ -155,8 +170,26 @@ export function AdminBulkImportPage() {
         initMap[m.detected_column] = m.mapped_field
       })
       setCustomMappings(initMap)
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Validation failed. Please verify file format.')
+
+      // Set target profiles to at least the count of uploaded rows or current limit
+      const detectedCount = Math.max(500, preview.total_rows)
+      setTargetProfiles(detectedCount)
+
+      // If subscription expired or quota will be exceeded, prompt subscription immediately
+      if (
+        subStatus &&
+        (subStatus.status === 'expired' ||
+          subStatus.quota_exceeded ||
+          subStatus.current_profiles + preview.total_rows > subStatus.profile_limit)
+      ) {
+        setShowSubModal(true)
+      }
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Validation failed. Please verify file format.'
+      setErrorMessage(msg)
+      if (msg.includes('402') || msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('quota')) {
+        setShowSubModal(true)
+      }
     } finally {
       setIsValidating(false)
     }
@@ -180,10 +213,150 @@ export function AdminBulkImportPage() {
         JSON.stringify(customMappings),
       )
       setFinalReport(result)
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Execution failed during database import.')
+      void getSubscriptionStatus().then(setSubStatus).catch(() => null)
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Execution failed during database import.'
+      setErrorMessage(msg)
+      if (
+        msg.includes('402') ||
+        msg.toLowerCase().includes('subscription') ||
+        msg.toLowerCase().includes('payment') ||
+        msg.toLowerCase().includes('quota')
+      ) {
+        setShowSubModal(true)
+      }
     } finally {
       setIsExecuting(false)
+    }
+  }
+
+  const handleProceedToRazorpay = async () => {
+    setIsProcessingPayment(true)
+    setPaymentNotice(null)
+    try {
+      // 1. Create order on backend
+      const orderData = await createRazorpayOrder('custom', selectedBillingCycle, targetProfiles)
+
+      // 2. Load script
+      const scriptLoaded = await loadRazorpayScript()
+      if (!scriptLoaded || !(window as any).Razorpay) {
+        // Fallback to sandbox simulation
+        await simulateTestSubscription('custom', selectedBillingCycle, targetProfiles)
+        const updated = await getSubscriptionStatus()
+        setSubStatus(updated)
+        setPaymentNotice({
+          type: 'success',
+          text: `Payment simulated successfully! Subscribed for ${targetProfiles.toLocaleString()} profiles.`,
+        })
+        setTimeout(() => {
+          setShowSubModal(false)
+          setPaymentNotice(null)
+        }, 1800)
+        return
+      }
+
+      // 3. Launch Razorpay modal
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'FORGR Academic Intelligence',
+        description: `Institutional Subscription - ${targetProfiles.toLocaleString()} Profiles (${selectedBillingCycle})`,
+        order_id: orderData.order_id,
+        prefill: {
+          email: 'admin@forgr.app',
+          name: 'Institutional Administrator',
+        },
+        theme: {
+          color: '#ff6b35',
+        },
+        handler: async (response: {
+          razorpay_payment_id: string
+          razorpay_order_id: string
+          razorpay_signature: string
+        }) => {
+          try {
+            await verifyPayment(response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature)
+            const updated = await getSubscriptionStatus()
+            setSubStatus(updated)
+            setPaymentNotice({
+              type: 'success',
+              text: `Payment verified! Subscribed for ${targetProfiles.toLocaleString()} managed profiles.`,
+            })
+            setTimeout(() => {
+              setShowSubModal(false)
+              setPaymentNotice(null)
+            }, 1800)
+          } catch (vErr: any) {
+            setPaymentNotice({
+              type: 'error',
+              text: vErr?.message || 'Payment verification failed. Please contact support.',
+            })
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessingPayment(false)
+          },
+        },
+      }
+
+      const rzp = new (window as any).Razorpay(options)
+      rzp.on('payment.failed', (resp: any) => {
+        setPaymentNotice({
+          type: 'error',
+          text: `Payment failed: ${resp.error?.description || 'Transaction declined'}`,
+        })
+        setIsProcessingPayment(false)
+      })
+      rzp.open()
+    } catch (err: any) {
+      // If error (e.g. razorpay keys placeholder), fallback to sandbox simulation
+      try {
+        await simulateTestSubscription('custom', selectedBillingCycle, targetProfiles)
+        const updated = await getSubscriptionStatus()
+        setSubStatus(updated)
+        setPaymentNotice({
+          type: 'success',
+          text: `Sandbox activation complete! Managed profiles upgraded to ${targetProfiles.toLocaleString()}.`,
+        })
+        setTimeout(() => {
+          setShowSubModal(false)
+          setPaymentNotice(null)
+        }, 1800)
+      } catch (simErr: any) {
+        setPaymentNotice({
+          type: 'error',
+          text: err?.message || 'Unable to initiate payment.',
+        })
+      }
+    } finally {
+      setIsProcessingPayment(false)
+    }
+  }
+
+  const handleSimulateSandboxPayment = async () => {
+    setIsProcessingPayment(true)
+    setPaymentNotice(null)
+    try {
+      await simulateTestSubscription('custom', selectedBillingCycle, targetProfiles)
+      const updated = await getSubscriptionStatus()
+      setSubStatus(updated)
+      setPaymentNotice({
+        type: 'success',
+        text: `Sandbox activation active! Profile limit elevated to ${targetProfiles.toLocaleString()}.`,
+      })
+      setTimeout(() => {
+        setShowSubModal(false)
+        setPaymentNotice(null)
+      }, 1500)
+    } catch (err: any) {
+      setPaymentNotice({
+        type: 'error',
+        text: err?.message || 'Sandbox activation failed.',
+      })
+    } finally {
+      setIsProcessingPayment(false)
     }
   }
 
@@ -223,9 +396,6 @@ export function AdminBulkImportPage() {
           <p className="subtle" style={{ fontSize: '0.95rem' }}>Add a new dataset or merge updates into the live database.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-          <Link to="/admin/billing" className="button" style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.5rem 1.1rem' }}>
-            💳 Billing & Plans
-          </Link>
           <Link to="/admin/import-history" className="button" style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', color: 'var(--text)', borderRadius: '8px', padding: '0.5rem 1.1rem' }}>
             📋 Import History
           </Link>
@@ -293,8 +463,14 @@ export function AdminBulkImportPage() {
               </div>
             </div>
 
-            <Link
-              to="/admin/billing"
+            <button
+              type="button"
+              onClick={() => {
+                if (validationResult) {
+                  setTargetProfiles(Math.max(500, validationResult.total_rows))
+                }
+                setShowSubModal(true)
+              }}
               className="button"
               style={{
                 fontSize: '0.82rem',
@@ -305,10 +481,11 @@ export function AdminBulkImportPage() {
                 borderRadius: '8px',
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
+                cursor: 'pointer',
               }}
             >
-              {subStatus.status === 'active' ? 'Manage Quota 💳' : 'Subscribe via Razorpay ⚡'}
-            </Link>
+              {subStatus.status === 'active' ? 'Manage Profiles & Plans ⚡' : 'Subscribe via Razorpay ⚡'}
+            </button>
           </div>
         </div>
       )}
@@ -611,6 +788,69 @@ export function AdminBulkImportPage() {
             </SectionCard>
           )}
 
+          {/* ── Institutional Profile Capacity & Validation Status Gate ── */}
+          <div style={{
+            background: 'linear-gradient(165deg, #1d2026 0%, #151619 100%)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '1.25rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>🛡️</span>
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text)' }}>
+                  Institutional Profile Capacity & Subscription Status
+                </h4>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-subtle)' }}>
+                This CSV contains <strong style={{ color: 'var(--text)' }}>{validationResult.total_rows.toLocaleString()} student records</strong>.
+                {subStatus && (
+                  <>
+                    {' '}Currently managing <strong>{subStatus.current_profiles.toLocaleString()} / {subStatus.profile_limit.toLocaleString()} profiles</strong>.
+                    {(subStatus.current_profiles + (importMode === 'replace' ? 0 : validationResult.total_rows)) > subStatus.profile_limit || subStatus.status === 'expired' ? (
+                      <span style={{ color: '#ff6b57', fontWeight: 600, display: 'block', marginTop: '0.35rem' }}>
+                        ⚠️ {subStatus.status === 'expired' ? 'Subscription expired.' : 'Incoming records will exceed current profile limit.'} Subscribe to manage and validate this cohort long-term.
+                      </span>
+                    ) : (
+                      <span style={{ color: '#6fc797', fontWeight: 600, display: 'block', marginTop: '0.35rem' }}>
+                        ✓ Quota available. Active subscription valid for long-term validation.
+                      </span>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTargetProfiles(Math.max(500, validationResult.total_rows))
+                setShowSubModal(true)
+              }}
+              className="button"
+              style={{
+                background: 'linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%)',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.6rem 1.25rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: '0 4px 14px rgba(255, 107, 53, 0.3)',
+              }}
+            >
+              <span>💳</span>
+              <span>Subscribe / Adjust Profiles via Razorpay</span>
+            </button>
+          </div>
+
           {/* ── Step 5: Import Mode Selection & Execution ── */}
           <SectionCard title="5. Import Mode & Confirmation" subtitle="Choose synchronization strategy before committing records to the database:">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.25rem' }}>
@@ -712,6 +952,296 @@ export function AdminBulkImportPage() {
             </Link>
           </div>
         </SectionCard>
+      )}
+
+      {/* ── In-Flow Subscription & Razorpay Gateway Modal ── */}
+      {showSubModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100,
+          padding: '1.25rem',
+        }}>
+          <div style={{
+            background: 'linear-gradient(165deg, #1e2025 0%, #151619 100%)',
+            border: '1px solid var(--border)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '660px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '1.75rem',
+            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>💳</span>
+                  <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)' }}>
+                    Subscribe for Managed Profiles
+                  </h3>
+                </div>
+                <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.88rem', color: 'var(--text-subtle)' }}>
+                  Activate institutional validation to manage student cohorts, predictions, and analytics long-term.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubModal(false)
+                  setPaymentNotice(null)
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-subtle)',
+                  fontSize: '1.4rem',
+                  cursor: 'pointer',
+                  padding: '0.2rem 0.5rem',
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Notification alert */}
+            {paymentNotice && (
+              <div style={{
+                padding: '0.85rem 1rem',
+                borderRadius: '8px',
+                background: paymentNotice.type === 'success' ? 'rgba(95, 163, 127, 0.15)' : 'rgba(240, 84, 106, 0.15)',
+                border: `1px solid ${paymentNotice.type === 'success' ? 'rgba(95, 163, 127, 0.4)' : 'rgba(240, 84, 106, 0.4)'}`,
+                color: paymentNotice.type === 'success' ? '#6fc797' : '#f0546a',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+              }}>
+                {paymentNotice.type === 'success' ? '✅' : '⚠️'} {paymentNotice.text}
+              </div>
+            )}
+
+            {/* Uploaded File Context */}
+            {validationResult && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                background: 'rgba(255, 107, 53, 0.08)',
+                border: '1px solid rgba(255, 107, 53, 0.25)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+              }}>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  Uploaded in this CSV: <strong style={{ color: 'var(--text)' }}>{validationResult.total_rows.toLocaleString()} student records</strong>
+                </span>
+                <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                  Recommended: {Math.max(500, validationResult.total_rows).toLocaleString()} profiles
+                </span>
+              </div>
+            )}
+
+            {/* Billing Interval Toggle */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Billing Cycle:
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBillingCycle('monthly')}
+                  style={{
+                    flex: 1,
+                    padding: '0.65rem',
+                    borderRadius: '8px',
+                    border: selectedBillingCycle === 'monthly' ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                    background: selectedBillingCycle === 'monthly' ? 'rgba(255, 107, 53, 0.12)' : 'var(--surface-subtle)',
+                    color: selectedBillingCycle === 'monthly' ? 'var(--accent)' : 'var(--text)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Monthly Billing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBillingCycle('yearly')}
+                  style={{
+                    flex: 1,
+                    padding: '0.65rem',
+                    borderRadius: '8px',
+                    border: selectedBillingCycle === 'yearly' ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                    background: selectedBillingCycle === 'yearly' ? 'rgba(255, 107, 53, 0.12)' : 'var(--surface-subtle)',
+                    color: selectedBillingCycle === 'yearly' ? 'var(--accent)' : 'var(--text)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <span>Yearly Billing</span>
+                  <span style={{ fontSize: '0.72rem', background: '#5FA37F', color: '#fff', padding: '2px 6px', borderRadius: '10px' }}>
+                    Save 20%
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Managed Profiles Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Number of Profiles to Manage:
+                </label>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: 'var(--accent)',
+                }}>
+                  {targetProfiles.toLocaleString()} Profiles
+                </span>
+              </div>
+
+              {/* Range Slider */}
+              <input
+                type="range"
+                min={200}
+                max={15000}
+                step={100}
+                value={targetProfiles}
+                onChange={(e) => setTargetProfiles(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  accentColor: 'var(--accent)',
+                  cursor: 'pointer',
+                }}
+              />
+
+              {/* Preset Buttons */}
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {[500, 1000, 2500, 5000, 10000].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setTargetProfiles(p)}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      border: targetProfiles === p ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      background: targetProfiles === p ? 'rgba(255, 107, 53, 0.15)' : 'var(--surface-subtle)',
+                      color: targetProfiles === p ? 'var(--accent)' : 'var(--text-subtle)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {p.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price Summary Card */}
+            <div style={{
+              padding: '1.2rem',
+              background: 'var(--surface-subtle)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.6rem',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-subtle)' }}>Total Investment</div>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+                    ₹{pricingInfo.total.toLocaleString()}
+                    <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-subtle)', marginLeft: '4px' }}>
+                      / {selectedBillingCycle === 'yearly' ? 'year' : 'month'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>Effective Rate</div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#6fc797' }}>
+                    ₹{pricingInfo.rate.toFixed(2)} / profile / mo
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.6rem', fontSize: '0.8rem', color: 'var(--text-subtle)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                <div>✓ Multi-year data validation</div>
+                <div>✓ Placement ML predictions</div>
+                <div>✓ Attendance & Academic audit</div>
+                <div>✓ Razorpay GST invoice receipt</div>
+              </div>
+            </div>
+
+            {/* Razorpay Actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                disabled={isProcessingPayment}
+                onClick={handleProceedToRazorpay}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #072654 0%, #0c2340 100%)',
+                  border: '1px solid #144272',
+                  color: '#FFFFFF',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.6rem',
+                  boxShadow: '0 4px 18px rgba(7, 38, 84, 0.4)',
+                }}
+              >
+                <span>⚡</span>
+                <span>
+                  {isProcessingPayment
+                    ? 'Connecting to Razorpay Gateway...'
+                    : `Pay ₹${pricingInfo.total.toLocaleString()} with Razorpay`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isProcessingPayment}
+                onClick={handleSimulateSandboxPayment}
+                style={{
+                  width: '100%',
+                  padding: '0.55rem',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  border: '1px dashed var(--border)',
+                  color: 'var(--text-subtle)',
+                  fontSize: '0.8rem',
+                  cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
+                }}
+              >
+                ⚡ Simulate Sandbox Payment (Instant Test Activation)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

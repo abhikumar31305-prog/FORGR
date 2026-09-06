@@ -1,11 +1,11 @@
 services:
   - type: web
     name: forgr-backend
-    env: python
+    runtime: python
     region: oregon
     plan: free
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: sh -c "python -m alembic upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+    startCommand: python -m alembic upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     envVars:

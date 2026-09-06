@@ -91,11 +91,14 @@ def _ensure_schema_compatibility(db_engine):
     inspector = inspect(db_engine)
     if "risk_predictions" in inspector.get_table_names():
         existing_cols = {c["name"] for c in inspector.get_columns("risk_predictions")}
+        # Use TIMESTAMP (PostgreSQL/SQLite compatible) instead of DATETIME (SQLite-only)
+        db_dialect = db_engine.dialect.name
+        ts_type = "TIMESTAMP" if db_dialect == "postgresql" else "DATETIME"
         cols_to_add = [
             ("model_version", "VARCHAR(32) DEFAULT 'v1.0.0'"),
             ("model_name", "VARCHAR(64) DEFAULT 'ensemble_risk_predictor'"),
             ("confidence", "FLOAT DEFAULT 0.85"),
-            ("predicted_at", "DATETIME"),
+            ("predicted_at", ts_type),
         ]
         with db_engine.begin() as conn:
             for col_name, col_type in cols_to_add:
@@ -178,12 +181,10 @@ if os.getenv("FORGR_REDIS_URL"):
         redis_client.ping()
         logger.info("Redis connection established for caching and rate limiting")
     except Exception as exc:
-        logger.error(f"Failed to connect to Redis: {exc}")
-        if ENV == "production":
-            raise RuntimeError("FORGR_REDIS_URL is configured but Redis is unavailable.")
+        logger.warning(f"Redis unavailable — falling back to in-memory rate limiting: {exc}")
         redis_client = None
-elif ENV == "production":
-    raise RuntimeError("FORGR_REDIS_URL must be configured in production.")
+else:
+    logger.info("FORGR_REDIS_URL not set — using in-memory rate limiting (suitable for single-instance deployments)")
 
 
 @app.middleware("http")

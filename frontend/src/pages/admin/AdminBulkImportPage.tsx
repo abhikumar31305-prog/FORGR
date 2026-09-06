@@ -1,4 +1,4 @@
-import { useState, useRef, useId, type ChangeEvent, type DragEvent } from 'react'
+import { useState, useEffect, useRef, useId, type ChangeEvent, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   detectAndValidateImport,
@@ -8,6 +8,7 @@ import {
   type ImportPreviewResponse,
   type CohortAnalysisReport,
 } from '../../services/bulkImportApi'
+import { getSubscriptionStatus, type SubscriptionStatus } from '../../services/billingApi'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 
@@ -105,6 +106,11 @@ export function AdminBulkImportPage() {
     analysis_report?: CohortAnalysisReport
   } | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null)
+
+  useEffect(() => {
+    void getSubscriptionStatus().then(setSubStatus).catch(() => null)
+  }, [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileInputId = useId()
@@ -217,11 +223,95 @@ export function AdminBulkImportPage() {
           <p className="subtle" style={{ fontSize: '0.95rem' }}>Add a new dataset or merge updates into the live database.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-          <Link to="/admin/import-history" className="button" style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', color: 'var(--text)' }}>
+          <Link to="/admin/billing" className="button" style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.5rem 1.1rem' }}>
+            💳 Billing & Plans
+          </Link>
+          <Link to="/admin/import-history" className="button" style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', color: 'var(--text)', borderRadius: '8px', padding: '0.5rem 1.1rem' }}>
             📋 Import History
           </Link>
         </div>
       </header>
+
+      {/* ── Institutional Subscription & Quota Banner ── */}
+      {subStatus && (
+        <div style={{
+          background: 'linear-gradient(165deg, #202226 0%, #17181B 100%)',
+          border: '1px solid var(--border)',
+          borderRadius: '14px',
+          padding: '1.1rem 1.4rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: subStatus.status === 'active' ? 'rgba(95, 163, 127, 0.18)' : subStatus.status === 'trialing' ? 'rgba(232, 162, 61, 0.18)' : 'rgba(255, 90, 40, 0.18)',
+                  color: subStatus.status === 'active' ? '#6fc797' : subStatus.status === 'trialing' ? '#f2a93b' : '#ff6b57',
+                  border: `1px solid ${subStatus.status === 'active' ? 'rgba(95, 163, 127, 0.35)' : subStatus.status === 'trialing' ? 'rgba(232, 162, 61, 0.35)' : 'rgba(255, 90, 40, 0.35)'}`,
+                }}>
+                  ● {subStatus.status.toUpperCase()}
+                </span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text)' }}>
+                  {subStatus.plan_name}
+                </span>
+              </div>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-subtle)' }}>
+                {subStatus.status === 'active'
+                  ? `Active through ${subStatus.current_period_end ? new Date(subStatus.current_period_end).toLocaleDateString() : 'N/A'} (${subStatus.days_remaining} days left)`
+                  : subStatus.status === 'trialing'
+                  ? `14-Day Free Evaluation expires in ${subStatus.days_remaining} days`
+                  : 'Subscription expired. Please activate an institutional tier via Razorpay.'}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: '180px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                <span style={{ color: 'var(--text-subtle)' }}>Profiles Managed:</span>
+                <strong style={{ color: subStatus.quota_exceeded ? '#ff6b57' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+                  {subStatus.current_profiles} / {subStatus.profile_limit}
+                </strong>
+              </div>
+              <div style={{ height: '6px', width: '100%', background: 'var(--steel-3)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.min(100, (subStatus.current_profiles / Math.max(1, subStatus.profile_limit)) * 100)}%`,
+                  background: subStatus.quota_exceeded ? '#ff5a28' : 'linear-gradient(90deg, #5FA37F, #5FA8C4)',
+                  borderRadius: '3px',
+                }} />
+              </div>
+            </div>
+
+            <Link
+              to="/admin/billing"
+              className="button"
+              style={{
+                fontSize: '0.82rem',
+                padding: '0.4rem 0.9rem',
+                border: '1px solid rgba(255, 90, 40, 0.35)',
+                background: 'rgba(255, 90, 40, 0.12)',
+                color: '#ff7547',
+                borderRadius: '8px',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {subStatus.status === 'active' ? 'Manage Quota 💳' : 'Subscribe via Razorpay ⚡'}
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Category Selector Grid ── */}
       <SectionCard title="1. Select Import Category" subtitle="Choose the institutional data domain you are uploading:">

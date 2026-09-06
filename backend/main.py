@@ -31,7 +31,7 @@ from database import Base, engine, SessionLocal
 from pathlib import Path
 from uuid import uuid4
 
-from API import backlog, placement, employability, career, bulk_import
+from API import backlog, placement, employability, career, bulk_import, billing
 from routers import model_registry, ml_monitoring
 from routers.consent import router as consent_router
 from observability import RequestContextMiddleware, setup_sentry, setup_metrics, get_uptime_seconds
@@ -254,6 +254,7 @@ app.include_router(bulk_import.router)
 app.include_router(model_registry.router)
 app.include_router(ml_monitoring.router)
 app.include_router(consent_router)
+app.include_router(billing.router)
 
 
 @app.post("/students/{student_id}/resume")

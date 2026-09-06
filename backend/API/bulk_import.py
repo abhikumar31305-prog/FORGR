@@ -14,6 +14,7 @@ import json
 import os
 import re
 import uuid
+from datetime import datetime
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -95,6 +96,53 @@ def _extract_val(row: Dict[str, Any], keys: List[str], default: Any = None) -> A
         if k in row and row[k] is not None and str(row[k]).strip() != "":
             return row[k]
     return default
+
+
+def _check_admin_subscription_access(db: Session, admin_email: str, incoming_rows: int = 0, is_replace: bool = False):
+    """
+    Enforces that institutional administrators hold an active or trialing subscription,
+    and that managed student profile counts do not exceed the plan quota.
+    """
+    from API.billing import get_or_create_subscription
+    sub = get_or_create_subscription(db, admin_email)
+    now = datetime.utcnow()
+
+    # Validate active/trial duration
+    if sub.status == "active":
+        if sub.current_period_end and sub.current_period_end < now:
+            sub.status = "expired"
+            db.commit()
+            raise HTTPException(
+                status_code=402,
+                detail="Your institutional subscription period has expired. Please renew your subscription via Razorpay to continue validating and managing student cohorts.",
+            )
+    elif sub.status == "trialing":
+        if sub.trial_end and sub.trial_end < now:
+            sub.status = "expired"
+            db.commit()
+            raise HTTPException(
+                status_code=402,
+                detail="Your 14-day evaluation trial period has expired. Please subscribe to an institutional plan via Razorpay to continue validating and managing student data cohorts.",
+            )
+    elif sub.status in ("expired", "past_due", "cancelled"):
+        raise HTTPException(
+            status_code=402,
+            detail="Active subscription required. Please activate an institutional subscription via Razorpay to validate and manage cohorts.",
+        )
+
+    # Validate profile quota capacity
+    existing_students = db.query(models.Student.id).count()
+    projected_total = incoming_rows if is_replace else (existing_students + incoming_rows)
+
+    if projected_total > sub.profile_limit:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                f"Cohort profile capacity exceeded: Projected dataset of {projected_total} student profiles "
+                f"exceeds your active {sub.plan_id.upper()} plan capacity of {sub.profile_limit} profiles. "
+                f"Please upgrade your subscription tier via Razorpay."
+            ),
+        )
 
 
 def _generate_cohort_analysis(
@@ -872,6 +920,9 @@ async def bulk_import_unified_cohort(
 
     if not rows:
         raise HTTPException(status_code=400, detail="CSV file is empty or has no data rows.")
+
+    # Enforce active subscription and profile limit check
+    _check_admin_subscription_access(db, current_user.email, len(rows), is_replace=replace_existing)
 
     return _process_unified_dataset_rows(
         db=db,
@@ -1751,6 +1802,10 @@ async def detect_and_validate_import(
     if not rows:
         raise HTTPException(status_code=400, detail="CSV file is empty or contains no valid rows.")
 
+    # Enforce active subscription and profile limit check on validation
+    if clean_type in ("unified", "students"):
+        _check_admin_subscription_access(db, current_user.email, len(rows), is_replace=False)
+
     detected_cols = list(rows[0].keys())
     mappings = _detect_column_mappings(detected_cols, clean_type)
     return _validate_rows_pre_import(rows, clean_type, mappings, db)
@@ -1802,6 +1857,10 @@ async def execute_import_workflow(
     rows = _parse_csv(content)
     if not rows:
         raise HTTPException(status_code=400, detail="CSV file contains no data rows.")
+
+    # Enforce active subscription and profile limit check on execution
+    if clean_type in ("unified", "students"):
+        _check_admin_subscription_access(db, current_user.email, len(rows), is_replace=(clean_mode == "replace"))
 
     # Parse column mappings if supplied
     detected_cols = list(rows[0].keys())

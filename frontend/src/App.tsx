@@ -44,6 +44,11 @@ const AdminAuditLogsPage = lazy(() =>
     default: module.AdminAuditLogsPage,
   })),
 )
+const AdminBillingPage = lazy(() =>
+  import('./pages/admin/AdminBillingPage').then((module) => ({
+    default: module.AdminBillingPage,
+  })),
+)
 const ParentDashboardPage = lazy(() =>
   import('./pages/parent/ParentDashboardPage').then((module) => ({
     default: module.ParentDashboardPage,
@@ -159,6 +164,17 @@ function App() {
             <ProtectedRoute allowedRoles={['admin']}>
               <AppLayout>
                 <AdminAuditLogsPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/billing"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AppLayout>
+                <AdminBillingPage />
               </AppLayout>
             </ProtectedRoute>
           }

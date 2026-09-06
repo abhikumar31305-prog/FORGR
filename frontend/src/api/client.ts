@@ -30,15 +30,33 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 async function parseError(response: Response) {
-  let detail = 'Request failed.'
+  let detail = ''
 
   try {
-    const body = (await response.json()) as { detail?: string }
-    if (body.detail) {
+    const body = (await response.json()) as { detail?: unknown; message?: unknown }
+    if (typeof body.detail === 'string') {
       detail = body.detail
+    } else if (Array.isArray(body.detail)) {
+      detail = body.detail.map((d: any) => (typeof d === 'string' ? d : d.msg || JSON.stringify(d))).join(', ')
+    } else if (typeof body.message === 'string') {
+      detail = body.message
+    } else if (body.detail) {
+      detail = JSON.stringify(body.detail)
     }
   } catch {
-    // Keep the generic error message.
+    // Non-JSON response (e.g. HTML error page or static rewrite)
+  }
+
+  if (!detail) {
+    if (response.status === 404) {
+      detail = 'Endpoint not found (HTTP 404). Please verify backend URL and routes.'
+    } else if (response.status === 405) {
+      detail = 'Method not allowed (HTTP 405). The request hit the static frontend instead of the backend.'
+    } else if (response.status === 502 || response.status === 503) {
+      detail = 'Backend is waking up or temporarily unavailable (HTTP 502/503). Free tier backends take ~30-60s to wake up on Render.'
+    } else {
+      detail = `Request failed (HTTP ${response.status}).`
+    }
   }
 
   return detail
@@ -64,16 +82,24 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, authen
     }
   }
 
-  // Determine candidate URLs for resilience (Vite proxy -> configured URL -> 127.0.0.1:8000 -> localhost:8000)
-  const candidateUrls: string[] = [path]
-  if (CONFIGURED_API_URL && !candidateUrls.includes(`${CONFIGURED_API_URL}${path}`)) {
+  // Determine candidate URLs for resilience:
+  // 1. If VITE_API_BASE_URL is configured (e.g. in production on Vercel), it must be tried FIRST.
+  // 2. Otherwise fall back to relative path (Vite dev proxy) and local dev ports.
+  const candidateUrls: string[] = []
+  if (CONFIGURED_API_URL) {
     candidateUrls.push(`${CONFIGURED_API_URL}${path}`)
+  } else {
+    candidateUrls.push(path)
   }
-  if (!candidateUrls.includes(`http://127.0.0.1:8000${path}`)) {
-    candidateUrls.push(`http://127.0.0.1:8000${path}`)
-  }
-  if (!candidateUrls.includes(`http://localhost:8000${path}`)) {
-    candidateUrls.push(`http://localhost:8000${path}`)
+
+  // Fallbacks for local development
+  if (typeof window === 'undefined' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (!candidateUrls.includes(`http://127.0.0.1:8000${path}`)) {
+      candidateUrls.push(`http://127.0.0.1:8000${path}`)
+    }
+    if (!candidateUrls.includes(`http://localhost:8000${path}`)) {
+      candidateUrls.push(`http://localhost:8000${path}`)
+    }
   }
 
   let lastError: unknown = null
@@ -81,10 +107,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, authen
 
   for (const url of candidateUrls) {
     try {
-      response = await fetch(url, {
+      const res = await fetch(url, {
         ...init,
         headers,
       })
+      // If a relative path or fallback returned 404/405 and we have more candidates, continue to next
+      if ((res.status === 404 || res.status === 405) && candidateUrls.length > 1 && url === path) {
+        response = res
+        continue
+      }
+      response = res
       break
     } catch (err) {
       lastError = err
@@ -92,8 +124,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, authen
   }
 
   if (!response) {
+    const target = CONFIGURED_API_URL || 'http://127.0.0.1:8000'
     throw new Error(
-      `Unable to connect to backend server. Ensure backend is running at http://127.0.0.1:8000 (${lastError instanceof Error ? lastError.message : 'Network error'})`
+      `Unable to connect to backend server at ${target} (${lastError instanceof Error ? lastError.message : 'Network error'}). Ensure backend is live.`
     )
   }
 

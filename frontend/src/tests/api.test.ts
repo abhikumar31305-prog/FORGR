@@ -38,7 +38,7 @@ describe('API Client', () => {
     expect(result).toEqual({ success: true });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/test',
+      expect.stringContaining('/api/test'),
       expect.objectContaining({
         headers: expect.any(Headers),
       })

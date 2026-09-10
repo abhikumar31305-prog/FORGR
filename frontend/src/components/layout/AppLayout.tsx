@@ -2,6 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, type ReactNode } from 'react'
 import { useAuth } from '../../context/useAuth'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { UpdatePasswordModal } from '../auth/UpdatePasswordModal'
 import type { Role } from '../../types/auth'
 
 /* ── SVG Icons ────────────────────────────────────────────────────── */
@@ -187,6 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
 
   if (!session) return null
 
@@ -254,11 +256,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
           Logout
         </button>
 
-        <div className="fg-sidebar-foot">
+        <div
+          className="fg-sidebar-foot"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setIsPasswordModalOpen(true)}
+          title="Click to change account password"
+        >
           <div className="fg-avatar-sm">{initials}</div>
           <div className="fg-who">
             <div>{session.name}</div>
-            <div className="fg-role">{roleLabel}</div>
+            <div className="fg-role">{roleLabel} · 🔑 Password</div>
           </div>
         </div>
       </aside>
@@ -293,7 +300,29 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       : `Welcome, ${session.name}.`}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setIsPasswordModalOpen(true)}
+              className="button"
+              style={{
+                fontSize: '0.8rem',
+                padding: '0.4rem 0.75rem',
+                borderRadius: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                background: 'var(--surface-subtle)',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+              }}
+              title="Update your account password"
+            >
+              <span>🔑</span>
+              <span>Change Password</span>
+            </button>
             <ThemeToggle />
             <div className={`fg-session-pill ${pill.cls}`}>
               <span className="fg-dot" />
@@ -318,6 +347,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
         {children}
       </main>
+
+      {/* Quick Password Change Modal */}
+      <UpdatePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+      />
     </div>
   )
 }

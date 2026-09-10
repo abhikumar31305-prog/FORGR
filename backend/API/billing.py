@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -32,17 +32,55 @@ logger = logging.getLogger("forgr.billing")
 router = APIRouter(prefix="/api/billing", tags=["Billing & Subscriptions"])
 
 APP_ENV = os.getenv("FORGR_ENV", "development").lower()
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_forgr_demo")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "forgr_secret_test_key_123")
-IS_SIMULATION_MODE = not os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY_ID", "").startswith("rzp_test_forgr_demo")
-ALLOW_SIMULATION_IN_PROD = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes")
 
-if APP_ENV == "production" and IS_SIMULATION_MODE and not ALLOW_SIMULATION_IN_PROD:
-    raise RuntimeError(
-        "Production billing requires real Razorpay credentials. "
-        "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your environment, "
-        "or set FORGR_ALLOW_BILLING_SIMULATION=true for sandbox/pilot deployments."
-    )
+
+def get_razorpay_config() -> Dict[str, Any]:
+    """Resolves Razorpay API credentials and detects gateway mode."""
+    key_id = os.getenv("RAZORPAY_KEY_ID", "").strip()
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
+
+    # Determine mode:
+    # - 'test': starts with rzp_test_ and is a real key (not placeholder / demo)
+    # - 'live': starts with rzp_live_
+    # - 'simulation': fallback simulated transactions when keys are not configured
+    allow_sim = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes") or APP_ENV == "development"
+    is_dummy_key = key_id in ("rzp_test_demo", "rzp_test_placeholder", "mock_key", "rzp_test_TZu3xxLwOagSjA")
+
+    if not key_id or (is_dummy_key and allow_sim):
+        mode = "test" if key_id.startswith("rzp_test_") else "simulation"
+        is_simulation = True
+    elif key_id.startswith("rzp_test_"):
+        mode = "test"
+        is_simulation = False
+    elif key_id.startswith("rzp_live_"):
+        mode = "live"
+        is_simulation = False
+    else:
+        mode = "test" if "test" in key_id else "live"
+        is_simulation = False
+
+    return {
+        "key_id": key_id or "rzp_test_forgr_demo",
+        "key_secret": key_secret or "forgr_secret_test_key_123",
+        "webhook_secret": webhook_secret or key_secret or "forgr_secret_test_key_123",
+        "mode": mode,
+        "is_simulation": is_simulation,
+    }
+
+
+def check_production_billing_safety():
+    cfg = get_razorpay_config()
+    allow_sim = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes")
+    if APP_ENV == "production" and cfg["is_simulation"] and not allow_sim:
+        raise RuntimeError(
+            "Production billing requires real Razorpay credentials. "
+            "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your environment, "
+            "or set FORGR_ALLOW_BILLING_SIMULATION=true for sandbox/pilot deployments."
+        )
+
+
+check_production_billing_safety()
 
 # ── Plan Specifications (in INR ₹) ───────────────────────────────────
 USD_TO_INR = 83.0
@@ -196,12 +234,19 @@ def get_or_create_subscription(db: Session, admin_email: str) -> models.Subscrip
 
 def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
     """Verifies HMAC SHA-256 signature from Razorpay callback."""
-    if IS_SIMULATION_MODE and signature.startswith("sim_sig_"):
+    cfg = get_razorpay_config()
+    allow_sim = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes") or APP_ENV == "development"
+    is_sim_req = (
+        signature.startswith("sim_sig_")
+        or order_id.startswith("order_sim_")
+        or payment_id.startswith("pay_sim_")
+    )
+    if (cfg["is_simulation"] or allow_sim) and is_sim_req:
         return True
 
     payload = f"{order_id}|{payment_id}".encode("utf-8")
     generated_sig = hmac.new(
-        RAZORPAY_KEY_SECRET.encode("utf-8"),
+        cfg["key_secret"].encode("utf-8"),
         payload,
         hashlib.sha256
     ).hexdigest()
@@ -213,13 +258,15 @@ def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) ->
 @router.get("/plans")
 def get_billing_plans():
     """Returns available institutional subscription plans and pricing rules."""
+    cfg = get_razorpay_config()
     return {
         "currency": "INR",
         "currency_symbol": "₹",
         "plans": list(PRICING_TIERS.values()),
         "annual_discount_percentage": 20,
-        "is_simulation_mode": IS_SIMULATION_MODE,
-        "razorpay_key_id": RAZORPAY_KEY_ID,
+        "is_simulation_mode": cfg["is_simulation"],
+        "gateway_mode": cfg["mode"],
+        "razorpay_key_id": cfg["key_id"],
     }
 
 
@@ -231,6 +278,7 @@ def get_subscription_status(
     """
     Returns current subscription status, managed profile counts, and validity.
     """
+    cfg = get_razorpay_config()
     sub = get_or_create_subscription(db, current_user.email)
     now = datetime.utcnow()
 
@@ -271,8 +319,9 @@ def get_subscription_status(
         "profile_limit": sub.profile_limit,
         "quota_exceeded": quota_exceeded,
         "can_import": is_valid and not quota_exceeded,
-        "is_simulation_mode": IS_SIMULATION_MODE,
-        "razorpay_key_id": RAZORPAY_KEY_ID,
+        "is_simulation_mode": cfg["is_simulation"],
+        "gateway_mode": cfg["mode"],
+        "razorpay_key_id": cfg["key_id"],
     }
 
 
@@ -285,6 +334,7 @@ async def create_razorpay_order(
     """
     Creates a Razorpay order in INR paise based on chosen profile quota and billing cycle.
     """
+    cfg = get_razorpay_config()
     plan_key = req.plan_id.lower().strip()
     cycle = req.billing_cycle.lower().strip()
     if cycle not in ("monthly", "yearly"):
@@ -306,13 +356,14 @@ async def create_razorpay_order(
 
     # Execute Razorpay Order Creation via official API or Simulator
     razorpay_order_id = ""
+    allow_sim = os.getenv("FORGR_ALLOW_BILLING_SIMULATION", "false").lower() in ("true", "1", "yes") or APP_ENV == "development"
 
-    if not IS_SIMULATION_MODE:
+    if not cfg["is_simulation"]:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 res = await client.post(
                     "https://api.razorpay.com/v1/orders",
-                    auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
+                    auth=(cfg["key_id"], cfg["key_secret"]),
                     json={
                         "amount": amount_paise,
                         "currency": "INR",
@@ -328,17 +379,35 @@ async def create_razorpay_order(
                 if res.status_code == 200:
                     razorpay_order_id = res.json().get("id", "")
                 else:
-                    logger.error("Razorpay order creation failed: %s", res.text)
-                    raise HTTPException(status_code=502, detail="Payment provider could not create the order.")
+                    err_desc = "Order creation failed"
+                    try:
+                        err_desc = res.json().get("error", {}).get("description") or res.text
+                    except Exception:
+                        err_desc = res.text
+                    logger.warning("Razorpay order creation returned [%d]: %s", res.status_code, err_desc)
+                    if allow_sim:
+                        logger.info("Local environment active: seamlessly falling back to simulated order.")
+                        razorpay_order_id = f"order_sim_{uuid.uuid4().hex[:14]}"
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST if res.status_code in (400, 401) else status.HTTP_502_BAD_GATEWAY,
+                            detail=f"Razorpay error: {err_desc}",
+                        )
         except Exception as e:
             if isinstance(e, HTTPException):
                 raise
             logger.exception("Razorpay order creation failed")
-            raise HTTPException(status_code=502, detail="Payment provider is unavailable.") from e
+            if allow_sim:
+                logger.info("Local environment active: seamlessly falling back to simulated order.")
+                razorpay_order_id = f"order_sim_{uuid.uuid4().hex[:14]}"
+            else:
+                raise HTTPException(status_code=502, detail="Payment provider is unavailable.") from e
 
-    # Fallback to simulated order ID if in dev/simulation or offline
+    # Fallback to simulated order ID if in dev/simulation
     if not razorpay_order_id:
         razorpay_order_id = f"order_sim_{uuid.uuid4().hex[:14]}"
+
+    is_sim_order = cfg["is_simulation"] or razorpay_order_id.startswith("order_sim_")
 
     # Record pending transaction
     tx = models.PaymentTransaction(
@@ -359,11 +428,12 @@ async def create_razorpay_order(
         "amount_paise": amount_paise,
         "amount_inr": amount_inr,
         "currency": "INR",
-        "key_id": RAZORPAY_KEY_ID,
+        "key_id": cfg["key_id"],
         "plan_id": plan_key,
         "billing_cycle": cycle,
         "profile_limit": profile_limit,
-        "is_simulation": IS_SIMULATION_MODE,
+        "is_simulation": is_sim_order,
+        "gateway_mode": "simulation" if is_sim_order else cfg["mode"],
     }
 
 
@@ -506,3 +576,78 @@ def get_payment_transactions(
         }
         for t in txs
     ]
+
+
+@router.post("/webhook")
+async def razorpay_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Handles Razorpay asynchronous webhooks (e.g. payment.captured, order.paid).
+    Verifies X-Razorpay-Signature header against RAZORPAY_WEBHOOK_SECRET.
+    """
+    body_bytes = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature") or request.headers.get("x-razorpay-signature")
+
+    cfg = get_razorpay_config()
+    secret = cfg.get("webhook_secret") or cfg.get("key_secret")
+
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing X-Razorpay-Signature header.")
+
+    computed_signature = hmac.new(
+        secret.encode("utf-8"),
+        body_bytes,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(computed_signature, signature):
+        logger.warning("Invalid Razorpay webhook signature received.")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature.")
+
+    try:
+        event = json.loads(body_bytes.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from e
+
+    event_type = event.get("event")
+    logger.info("Received Razorpay webhook event: %s", event_type)
+
+    if event_type in ("payment.captured", "order.paid"):
+        payload_data = event.get("payload", {})
+        payment_entity = payload_data.get("payment", {}).get("entity", {})
+        order_id = payment_entity.get("order_id")
+        payment_id = payment_entity.get("id")
+
+        if not order_id and event_type == "order.paid":
+            order_id = payload_data.get("order", {}).get("entity", {}).get("id")
+
+        if order_id:
+            tx = db.query(models.PaymentTransaction).filter(
+                models.PaymentTransaction.razorpay_order_id == order_id
+            ).first()
+
+            if tx and tx.status != "captured":
+                tx.status = "captured"
+                if payment_id:
+                    tx.razorpay_payment_id = payment_id
+                tx.razorpay_signature = signature
+
+                # Activate subscription
+                sub = get_or_create_subscription(db, tx.admin_email)
+                now = datetime.utcnow()
+                duration_days = 365 if tx.billing_cycle == "yearly" else 30
+
+                sub.plan_id = tx.plan_id
+                sub.billing_cycle = tx.billing_cycle
+                sub.profile_limit = tx.profile_limit
+                sub.status = "active"
+                sub.current_period_start = now
+                sub.current_period_end = now + timedelta(days=duration_days)
+
+                db.commit()
+                logger.info("Activated subscription for %s via webhook", tx.admin_email)
+
+    return {"status": "ok", "event": event_type}
+

@@ -19,6 +19,7 @@ import {
 } from '../../services/billingApi'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
+import { RazorpaySandboxModal } from '../../components/admin/RazorpaySandboxModal'
 
 interface CategoryMeta {
   type: BulkDatasetType
@@ -120,6 +121,21 @@ export function AdminBulkImportPage() {
   const [targetProfiles, setTargetProfiles] = useState(500)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [paymentNotice, setPaymentNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [sandboxModal, setSandboxModal] = useState<{
+    isOpen: boolean
+    orderId: string
+    amountInr: number
+    planName: string
+    billingCycle: string
+    profileLimit: number
+  }>({
+    isOpen: false,
+    orderId: '',
+    amountInr: 0,
+    planName: '',
+    billingCycle: 'yearly',
+    profileLimit: 500,
+  })
 
   const pricingInfo = calculateCustomPlanPrice(targetProfiles, selectedBillingCycle)
 
@@ -237,19 +253,18 @@ export function AdminBulkImportPage() {
       // 1. Create order on backend
       const orderData = await createRazorpayOrder('custom', selectedBillingCycle, targetProfiles)
 
-      // 2. Simulations still exercise the backend verification contract.
+      // 2. In Sandbox / Simulation mode, pop up interactive test checkout
       if (orderData.is_simulation) {
-        await verifyPayment(orderData.order_id, `pay_sim_${crypto.randomUUID()}`, `sim_sig_${orderData.order_id}`)
-        const updated = await getSubscriptionStatus()
-        setSubStatus(updated)
-        setPaymentNotice({
-          type: 'success',
-          text: `Payment simulation completed. Subscribed for ${targetProfiles.toLocaleString()} profiles.`,
+        setIsProcessingPayment(false)
+        setShowSubModal(false)
+        setSandboxModal({
+          isOpen: true,
+          orderId: orderData.order_id,
+          amountInr: orderData.amount_inr,
+          planName: 'Custom Institutional Tier',
+          billingCycle: selectedBillingCycle,
+          profileLimit: targetProfiles,
         })
-        setTimeout(() => {
-          setShowSubModal(false)
-          setPaymentNotice(null)
-        }, 1800)
         return
       }
 
@@ -350,6 +365,27 @@ export function AdminBulkImportPage() {
     }
   }
 
+  const handleSandboxPaymentSuccess = async (orderId: string, paymentId: string, signature: string) => {
+    try {
+      await verifyPayment(orderId, paymentId, signature)
+      const updated = await getSubscriptionStatus()
+      setSubStatus(updated)
+      setPaymentNotice({
+        type: 'success',
+        text: `✓ Payment verified! Profile limit elevated to ${targetProfiles.toLocaleString()} managed profiles.`,
+      })
+      setShowSubModal(false)
+    } catch (vErr: unknown) {
+      setPaymentNotice({
+        type: 'error',
+        text: vErr instanceof Error ? vErr.message : 'Payment verification failed.',
+      })
+      throw vErr
+    } finally {
+      setIsProcessingPayment(false)
+    }
+  }
+
   const handleDownloadErrorReport = () => {
     if (!validationResult || validationResult.validation_errors.length === 0) return
     const headers = ['Row Number', 'Student ID', 'Field', 'Invalid Value', 'Error Reason', 'Suggested Correction', 'Severity']
@@ -395,7 +431,7 @@ export function AdminBulkImportPage() {
       {/* ── Institutional Subscription & Quota Banner ── */}
       {subStatus && (
         <div style={{
-          background: 'linear-gradient(165deg, #202226 0%, #17181B 100%)',
+          background: 'var(--card-bg)',
           border: '1px solid var(--border)',
           borderRadius: '14px',
           padding: '1.1rem 1.4rem',
@@ -404,7 +440,7 @@ export function AdminBulkImportPage() {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '1rem',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'var(--shadow-card)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div>
@@ -429,8 +465,8 @@ export function AdminBulkImportPage() {
                 {subStatus.status === 'active'
                   ? `Active through ${subStatus.current_period_end ? new Date(subStatus.current_period_end).toLocaleDateString() : 'N/A'} (${subStatus.days_remaining} days left)`
                   : subStatus.status === 'trialing'
-                  ? `14-Day Free Evaluation expires in ${subStatus.days_remaining} days`
-                  : 'Subscription expired. Please activate an institutional tier via Razorpay.'}
+                    ? `14-Day Free Evaluation expires in ${subStatus.days_remaining} days`
+                    : 'Subscription expired. Please activate an institutional tier via Razorpay.'}
               </p>
             </div>
           </div>
@@ -780,7 +816,7 @@ export function AdminBulkImportPage() {
 
           {/* ── Institutional Profile Capacity & Validation Status Gate ── */}
           <div style={{
-            background: 'linear-gradient(165deg, #1d2026 0%, #151619 100%)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: '12px',
             padding: '1.25rem',
@@ -789,6 +825,7 @@ export function AdminBulkImportPage() {
             alignItems: 'center',
             flexWrap: 'wrap',
             gap: '1rem',
+            boxShadow: 'var(--shadow-card)',
           }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -958,7 +995,7 @@ export function AdminBulkImportPage() {
           padding: '1.25rem',
         }}>
           <div style={{
-            background: 'linear-gradient(165deg, #1e2025 0%, #151619 100%)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: '16px',
             width: '100%',
@@ -966,7 +1003,7 @@ export function AdminBulkImportPage() {
             maxHeight: '90vh',
             overflowY: 'auto',
             padding: '1.75rem',
-            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
+            boxShadow: 'var(--shadow-lg)',
             display: 'flex',
             flexDirection: 'column',
             gap: '1.25rem',
@@ -1133,9 +1170,9 @@ export function AdminBulkImportPage() {
                       borderRadius: '6px',
                       fontSize: '0.78rem',
                       fontWeight: 600,
-                      border: targetProfiles === p ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      border: targetProfiles === p ? '1.5px solid var(--accent)' : '1px solid var(--border)',
                       background: targetProfiles === p ? 'rgba(255, 107, 53, 0.15)' : 'var(--surface-subtle)',
-                      color: targetProfiles === p ? 'var(--accent)' : 'var(--text-subtle)',
+                      color: targetProfiles === p ? 'var(--accent)' : 'var(--text)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1191,8 +1228,8 @@ export function AdminBulkImportPage() {
                   width: '100%',
                   padding: '0.85rem 1.25rem',
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #072654 0%, #0c2340 100%)',
-                  border: '1px solid #144272',
+                  background: 'linear-gradient(135deg, #ff5a28 0%, #e04b18 100%)',
+                  border: 'none',
                   color: '#FFFFFF',
                   fontWeight: 800,
                   fontSize: '1rem',
@@ -1201,7 +1238,7 @@ export function AdminBulkImportPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.6rem',
-                  boxShadow: '0 4px 18px rgba(7, 38, 84, 0.4)',
+                  boxShadow: '0 4px 18px rgba(255, 90, 40, 0.35)',
                 }}
               >
                 <span>⚡</span>
@@ -1218,12 +1255,13 @@ export function AdminBulkImportPage() {
                 onClick={handleSimulateSandboxPayment}
                 style={{
                   width: '100%',
-                  padding: '0.55rem',
+                  padding: '0.65rem',
                   borderRadius: '8px',
-                  background: 'transparent',
+                  background: 'var(--surface-subtle)',
                   border: '1px dashed var(--border)',
-                  color: 'var(--text-subtle)',
-                  fontSize: '0.8rem',
+                  color: 'var(--text)',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
                   cursor: isProcessingPayment ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -1233,6 +1271,19 @@ export function AdminBulkImportPage() {
           </div>
         </div>
       )}
+
+      {/* ── Interactive Razorpay Sandbox Test Checkout Modal ── */}
+      <RazorpaySandboxModal
+        isOpen={sandboxModal.isOpen}
+        onClose={() => setSandboxModal((prev) => ({ ...prev, isOpen: false }))}
+        orderId={sandboxModal.orderId}
+        amountInr={sandboxModal.amountInr}
+        planName={sandboxModal.planName}
+        billingCycle={sandboxModal.billingCycle}
+        profileLimit={sandboxModal.profileLimit}
+        onPaymentSuccess={handleSandboxPaymentSuccess}
+        onPaymentFailure={(errMsg) => setPaymentNotice({ type: 'error', text: errMsg })}
+      />
     </div>
   )
 }

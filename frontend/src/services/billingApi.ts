@@ -40,6 +40,7 @@ export interface BillingPlansResponse {
   plans: BillingPlan[]
   annual_discount_percentage: number
   is_simulation_mode: boolean
+  gateway_mode?: 'test' | 'live' | 'simulation'
   razorpay_key_id: string
 }
 
@@ -58,6 +59,7 @@ export interface SubscriptionStatus {
   quota_exceeded: boolean
   can_import: boolean
   is_simulation_mode: boolean
+  gateway_mode?: 'test' | 'live' | 'simulation'
   razorpay_key_id: string
 }
 
@@ -71,6 +73,7 @@ export interface CreateOrderResponse {
   billing_cycle: string
   profile_limit: number
   is_simulation: boolean
+  gateway_mode?: 'test' | 'live' | 'simulation'
 }
 
 export interface TransactionItem {

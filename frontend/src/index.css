@@ -2100,36 +2100,7 @@ a:focus-visible {
   background: #33353B;
 }
 
-/* SSO buttons */
 
-.forgr-sso-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.forgr-sso-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid #33353B;
-  background: #17181B;
-  border-radius: 10px;
-  padding: 10px;
-  font-size: 13px;
-  color: #ECEAE5;
-  cursor: pointer;
-  font-family: 'Space Grotesk', sans-serif;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.forgr-sso-btn svg { width: 14px; height: 14px; }
-
-.forgr-sso-btn:hover {
-  border-color: #454850;
-  background: #1D1E22;
-}
 
 /* Trust row */
 

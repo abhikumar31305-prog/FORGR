@@ -278,7 +278,7 @@ export function AdminImportHistoryPage() {
           padding: '1.5rem'
         }}>
           <div style={{
-            background: 'linear-gradient(165deg, #202226 0%, #17181B 100%)',
+            background: 'var(--card-bg)',
             border: '1px solid var(--border)',
             borderRadius: '16px',
             width: '100%',
@@ -286,7 +286,7 @@ export function AdminImportHistoryPage() {
             maxHeight: '85vh',
             overflowY: 'auto',
             padding: '1.75rem',
-            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.5)'
+            boxShadow: 'var(--shadow-lg)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--accent)', fontWeight: 700 }}>
@@ -317,7 +317,7 @@ export function AdminImportHistoryPage() {
               File: <strong style={{ color: 'var(--text)' }}>{selectedBatchErrors.file_name}</strong> · Status: <strong style={{ color: selectedBatchErrors.status === 'Completed' ? 'var(--patina)' : '#ff6b57' }}>{selectedBatchErrors.status}</strong> · Failed rows: <strong style={{ color: selectedBatchErrors.failed_rows > 0 ? '#ff6b57' : 'var(--text)' }}>{selectedBatchErrors.failed_rows}</strong>
             </p>
 
-            <div style={{ background: '#111215', borderRadius: '10px', padding: '1.25rem', border: '1px solid var(--border)', maxHeight: '380px', overflowY: 'auto' }}>
+            <div style={{ background: 'var(--surface-subtle)', borderRadius: '10px', padding: '1.25rem', border: '1px solid var(--border)', maxHeight: '380px', overflowY: 'auto' }}>
               {selectedBatchErrors.errors.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--patina)', fontSize: '0.88rem', fontWeight: 600 }}>✓ No row-level errors logged for this batch.</p>
               ) : (

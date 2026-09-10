@@ -950,8 +950,8 @@ export function BulkImportModal({ isOpen, onClose, onSuccess, userRole = 'admin'
             {isUploading || isSyncingBenchmark || isRecalculating
               ? statusMessage
               : file
-              ? `${file.name} ready (${importMode === 'append' ? 'Append Mode' : 'Replace Mode'})`
-              : 'Select a CSV file to begin'}
+                ? `${file.name} ready (${importMode === 'append' ? 'Append Mode' : 'Replace Mode'})`
+                : 'Select a CSV file to begin'}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button

@@ -10,6 +10,8 @@ from jose import JWTError, jwt
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
+if (BASE_DIR.parent / ".env").exists():
+    load_dotenv(BASE_DIR.parent / ".env")
 
 ENV = os.getenv("FORGR_ENV", "development").lower()
 

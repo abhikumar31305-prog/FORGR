@@ -330,18 +330,6 @@ export function LoginPage() {
               </svg>
               {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
-
-            {/* SSO */}
-            <div className="forgr-divider">or continue with</div>
-            <div className="forgr-sso-row">
-              <button className="forgr-sso-btn" type="button" onClick={() => alert('Single Sign-On (SSO) integration is enabled for verified university email domains.')}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M3 12h18M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18" />
-                </svg>
-                Google SSO
-              </button>
-            </div>
           </form>
 
           {/* Trust row */}

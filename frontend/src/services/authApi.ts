@@ -26,3 +26,13 @@ export async function loginWithBackend(payload: LoginPayload): Promise<UserSessi
 
   return toSession(response)
 }
+
+export async function changePasswordApi(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  }, true)
+}

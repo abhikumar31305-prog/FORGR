@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { SectionCard } from '../../components/ui/SectionCard'
 import { useAuth } from '../../context/useAuth'
+import { changePasswordApi } from '../../services/authApi'
 
 export function SettingsPage() {
   const { session, logout } = useAuth()
@@ -11,6 +12,7 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSavingPassword, setIsSavingPassword] = useState(false)
 
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [weeklyDigest, setWeeklyDigest] = useState(true)
@@ -26,7 +28,7 @@ export function SettingsPage() {
     setMessage('Account settings updated successfully.')
   }
 
-  const onChangePassword = (e: FormEvent) => {
+  const onChangePassword = async (e: FormEvent) => {
     e.preventDefault()
     setMessage('')
     setError('')
@@ -35,8 +37,8 @@ export function SettingsPage() {
       setError('Please enter your current password.')
       return
     }
-    if (newPassword.length < 4) {
-      setError('New password must be at least 4 characters.')
+    if (newPassword.length < 6) {
+      setError('New password must be at least 6 characters.')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -44,10 +46,18 @@ export function SettingsPage() {
       return
     }
 
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setMessage('Password changed successfully.')
+    try {
+      setIsSavingPassword(true)
+      const res = await changePasswordApi(currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setMessage(res.message || 'Password updated successfully.')
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update password. Please check your current password.')
+    } finally {
+      setIsSavingPassword(false)
+    }
   }
 
   return (
@@ -105,7 +115,7 @@ export function SettingsPage() {
                 <span>New Password</span>
                 <input
                   type="password"
-                  placeholder="Min 4 chars"
+                  placeholder="Min 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
@@ -121,8 +131,13 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <button className="btn btn-ghost" type="submit" style={{ width: 'fit-content' }}>
-              Update Password
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={isSavingPassword}
+              style={{ width: 'fit-content' }}
+            >
+              {isSavingPassword ? 'Updating Password...' : 'Update Password'}
             </button>
           </form>
         </SectionCard>

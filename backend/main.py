@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import json
+import re
 from collections import defaultdict, deque
 from fastapi import FastAPI, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +26,7 @@ from auth import (
     register_user,
     require_role,
 )
-from security import ENFORCE_HTTPS
+from security import ENFORCE_HTTPS, verify_password
 
 from database import Base, engine, SessionLocal
 from pathlib import Path
@@ -114,12 +115,14 @@ app.add_middleware(
     allowed_hosts=[h.strip() for h in os.getenv("FORGR_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",") if h.strip()]
 )
 
-# CORS middleware
-cors_origins = [origin.strip().rstrip("/") for origin in os.getenv("FORGR_CORS_ORIGINS", "http://127.0.0.1:5173").split(",") if origin.strip()]
+configured_cors_origins = [origin.strip().rstrip("/") for origin in os.getenv("FORGR_CORS_ORIGINS", "http://127.0.0.1:5173").split(",") if origin.strip()]
+cors_origins = [origin for origin in configured_cors_origins if "*" not in origin]
+cors_origin_patterns = [re.escape(origin).replace(r"\*", ".*") for origin in configured_cors_origins if "*" in origin]
+cors_origin_patterns.append(r"https://.*\.vercel\.app")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex="|".join(f"(?:{pattern})" for pattern in cors_origin_patterns),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -407,6 +410,25 @@ def confirm_password_reset(payload: schemas.PasswordResetConfirm, db: Session = 
         return {"message": "Password updated. You can sign in with the new password."}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/auth/change-password", response_model=schemas.ChangePasswordResponse)
+def change_password(
+    payload: schemas.ChangePasswordRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password does not match.")
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters long.")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password.")
+    
+    current_user.password_hash = crud.hash_password(payload.new_password)
+    crud.record_edit_action(db, "users", None, current_user.email, "password_changed", field_changed="password_hash")
+    db.commit()
+    return {"message": "Password updated successfully."}
 
 
 @app.post("/auth/email-verification/request", status_code=202)

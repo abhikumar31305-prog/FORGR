@@ -13,6 +13,7 @@ import {
   type TransactionItem,
 } from '../../services/billingApi'
 import { SectionCard } from '../../components/ui/SectionCard'
+import { RazorpaySandboxModal } from '../../components/admin/RazorpaySandboxModal'
 
 
 export function AdminBillingPage() {
@@ -25,6 +26,23 @@ export function AdminBillingPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [showTestGuide, setShowTestGuide] = useState(true)
+  const [gatewayInfo, setGatewayInfo] = useState<{ mode: string; keyId: string }>({ mode: 'test', keyId: '' })
+  const [sandboxModal, setSandboxModal] = useState<{
+    isOpen: boolean
+    orderId: string
+    amountInr: number
+    planName: string
+    billingCycle: string
+    profileLimit: number
+  }>({
+    isOpen: false,
+    orderId: '',
+    amountInr: 0,
+    planName: '',
+    billingCycle: 'yearly',
+    profileLimit: 2500,
+  })
 
   const loadData = async () => {
     setIsLoading(true)
@@ -38,6 +56,10 @@ export function AdminBillingPage() {
       setPlans(plansRes.plans)
       setStatus(statusRes)
       setTransactions(txRes)
+      setGatewayInfo({
+        mode: statusRes.gateway_mode || plansRes.gateway_mode || (statusRes.is_simulation_mode ? 'simulation' : 'test'),
+        keyId: statusRes.razorpay_key_id || plansRes.razorpay_key_id || '',
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to retrieve billing and subscription status.')
     } finally {
@@ -58,6 +80,10 @@ export function AdminBillingPage() {
         setPlans(plansRes.plans)
         setStatus(statusRes)
         setTransactions(txRes)
+        setGatewayInfo({
+          mode: statusRes.gateway_mode || plansRes.gateway_mode || (statusRes.is_simulation_mode ? 'simulation' : 'test'),
+          keyId: statusRes.razorpay_key_id || plansRes.razorpay_key_id || '',
+        })
       } catch (err) {
         if (!active) return
         setError(err instanceof Error ? err.message : 'Failed to retrieve billing and subscription status.')
@@ -81,20 +107,25 @@ export function AdminBillingPage() {
       // 1. Create order on backend
       const order = await createRazorpayOrder(planId, billingCycle, profileCount)
 
-      // 2. Simulations still exercise the backend verification contract.
+      // 2. In Simulation / Test mode with sandbox keys, pop up interactive test checkout
       if (order.is_simulation) {
-        const simPaymentId = `pay_sim_${crypto.randomUUID()}`
-        const simSignature = `sim_sig_${order.order_id}`
-        const res = await verifyPayment(order.order_id, simPaymentId, simSignature)
-        setSuccessMessage(`Razorpay simulation completed. ${res.message}`)
-        await loadData()
+        setIsProcessing(false)
+        const planObj = plans.find((p) => p.id === planId)
+        setSandboxModal({
+          isOpen: true,
+          orderId: order.order_id,
+          amountInr: order.amount_inr,
+          planName: planObj ? planObj.name : planId === 'custom' ? 'Custom Cohort Plan' : planId.toUpperCase(),
+          billingCycle: billingCycle,
+          profileLimit: order.profile_limit,
+        })
         return
       }
 
-      // 3. Live mode requires the real checkout SDK; never silently simulate it.
+      // 3. Live or authenticated test mode uses official Razorpay Checkout SDK
       const scriptLoaded = await loadRazorpayScript()
       if (!scriptLoaded || !window.Razorpay) {
-        throw new Error('Razorpay checkout could not load. Check network policy or ad-blocking and try again.')
+        throw new Error('Razorpay checkout could not load. Check network connection or ad-blockers and try again.')
       }
 
       if (window.Razorpay) {
@@ -120,7 +151,14 @@ export function AdminBillingPage() {
               await loadData()
             } catch (vErr) {
               setError(vErr instanceof Error ? vErr.message : 'Payment verification failed.')
+            } finally {
+              setIsProcessing(false)
             }
+          },
+          modal: {
+            ondismiss: () => {
+              setIsProcessing(false)
+            },
           },
           prefill: {
             email: status?.admin_email || 'admin@forgr.app',
@@ -130,10 +168,41 @@ export function AdminBillingPage() {
           },
         }
         const rzp = new window.Razorpay(options)
+        rzp.on('payment.failed', (response: { error?: { description?: string; reason?: string } }) => {
+          setError(`Payment Failed: ${response.error?.description || response.error?.reason || 'Transaction declined.'}`)
+          setIsProcessing(false)
+        })
         rzp.open()
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initiate Razorpay subscription.')
+      setIsProcessing(false)
+    }
+  }
+
+  const handleInstantActivate = async (planId: string, profileLimit: number) => {
+    setIsProcessing(true)
+    setError('')
+    setSuccessMessage('')
+    try {
+      const res = await simulateTestSubscription(planId, billingCycle, profileLimit, false)
+      setSuccessMessage(`⚡ Instant Test Activation: ${planId.toUpperCase()} tier is now active for up to ${res.profile_limit.toLocaleString()} managed profiles!`)
+      await loadData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Instant activation failed.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleSandboxPaymentSuccess = async (orderId: string, paymentId: string, signature: string) => {
+    try {
+      const res = await verifyPayment(orderId, paymentId, signature)
+      setSuccessMessage(`✓ Razorpay Sandbox Payment Verified! ${res.message}`)
+      await loadData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment verification failed.')
+      throw err
     } finally {
       setIsProcessing(false)
     }
@@ -163,13 +232,79 @@ export function AdminBillingPage() {
       {/* ── Page Header ── */}
       <header className="dashboard-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <p className="eyebrow">Enterprise Data Validation & Cohort Scaling</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+            <p className="eyebrow" style={{ margin: 0 }}>Enterprise Data Validation & Cohort Scaling</p>
+            {gatewayInfo.mode === 'test' && (
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: 'rgba(232, 162, 61, 0.18)',
+                color: '#f2a93b',
+                border: '1px solid rgba(232, 162, 61, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}>
+                ⚡ Razorpay Test Mode ({gatewayInfo.keyId ? `${gatewayInfo.keyId.substring(0, 12)}...` : 'rzp_test_...'})
+              </span>
+            )}
+            {gatewayInfo.mode === 'simulation' && (
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: 'rgba(95, 168, 196, 0.18)',
+                color: '#7bc8e2',
+                border: '1px solid rgba(95, 168, 196, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}>
+                🧪 Gateway Simulator (Mock)
+              </span>
+            )}
+            {gatewayInfo.mode === 'live' && (
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: 'rgba(95, 163, 127, 0.18)',
+                color: '#6fc797',
+                border: '1px solid rgba(95, 163, 127, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}>
+                🔒 Razorpay Live
+              </span>
+            )}
+          </div>
           <h1 className="headline" style={{ fontSize: '2.2rem', margin: '0.2rem 0' }}>Institutional Subscription & Billing</h1>
           <p className="subtle" style={{ fontSize: '0.95rem' }}>
             Scale your student profile capacity, extend validation validity, and manage Razorpay institutional billing.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => setShowTestGuide(!showTestGuide)}
+            style={{
+              border: '1px solid rgba(232, 162, 61, 0.4)',
+              background: showTestGuide ? 'rgba(232, 162, 61, 0.15)' : 'var(--surface-subtle)',
+              color: '#f2a93b',
+              borderRadius: '8px',
+              padding: '0.5rem 0.9rem',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+            }}
+          >
+            {showTestGuide ? '✕ Hide Test Guide' : '💡 Razorpay Test Guide'}
+          </button>
           <Link to="/admin/bulk-import" className="button" style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.5rem 1.1rem' }}>
             📥 Bulk Data Import
           </Link>
@@ -192,14 +327,79 @@ export function AdminBillingPage() {
         </div>
       )}
 
+      {/* ── Razorpay Test Mode Helper Card ── */}
+      {showTestGuide && (
+        <div style={{
+          background: 'var(--card-bg)',
+          border: '1px solid rgba(232, 162, 61, 0.4)',
+          borderRadius: '12px',
+          padding: '1.2rem',
+          boxShadow: 'var(--shadow-card)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.1rem' }}>💳</span>
+              <strong style={{ fontSize: '0.95rem', color: 'var(--text)' }}>Razorpay Gateway Test Mode Integration Guide</strong>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-subtle)' }}>
+              Active Mode: <strong style={{ color: '#f2a93b' }}>{gatewayInfo.mode.toUpperCase()}</strong>
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', fontSize: '0.85rem' }}>
+            {/* Box 1: Test Cards */}
+            <div style={{ background: 'var(--surface-subtle)', padding: '0.9rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 700, color: '#f2a93b', marginBottom: '0.4rem' }}>🃏 Test Card Credentials</div>
+              <p style={{ margin: '0 0 0.4rem 0', color: 'var(--text-subtle)', fontSize: '0.8rem' }}>
+                Use these mock credentials in the Razorpay Checkout pop-up:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.6', color: 'var(--text)' }}>
+                <li>Card Number: <code style={{ color: '#5FA37F', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>4111 1111 1111 1111</code></li>
+                <li>Expiry: <code style={{ color: '#5FA37F', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>12/28</code> (any future date)</li>
+                <li>CVV: <code style={{ color: '#5FA37F', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>123</code> | OTP: <code style={{ color: '#5FA37F', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>123456</code></li>
+              </ul>
+            </div>
+
+            {/* Box 2: UPI & Netbanking */}
+            <div style={{ background: 'var(--surface-subtle)', padding: '0.9rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 700, color: '#5FA37F', marginBottom: '0.4rem' }}>📱 Test UPI & Netbanking</div>
+              <p style={{ margin: '0 0 0.4rem 0', color: 'var(--text-subtle)', fontSize: '0.8rem' }}>
+                Razorpay sandbox supports instant UPI verification:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.6', color: 'var(--text)' }}>
+                <li>Instant Success UPI: <code style={{ color: '#5FA37F', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>success@razorpay</code></li>
+                <li>Failure Test UPI: <code style={{ color: '#ff6b57', background: 'var(--card-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', fontWeight: 600 }}>failure@razorpay</code></li>
+                <li>Netbanking: Select any test bank, then click <em>Success</em> on Razorpay frame.</li>
+              </ul>
+            </div>
+
+            {/* Box 3: Setup Instructions */}
+            <div style={{ background: 'var(--surface-subtle)', padding: '0.9rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 700, color: '#5FA8C4', marginBottom: '0.4rem' }}>🔑 Connect Your Razorpay Keys</div>
+              <ol style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.5', color: 'var(--text)', fontSize: '0.8rem' }}>
+                <li>Sign in to <a href="https://dashboard.razorpay.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>dashboard.razorpay.com</a>.</li>
+                <li>Switch to <strong>Test Mode</strong> in top bar.</li>
+                <li>Go to <strong>Settings</strong> → <strong>API Keys</strong> → <strong>Generate Key</strong>.</li>
+                <li>Paste keys in <code style={{ color: '#f2a93b' }}>.env</code>:
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', background: 'var(--card-bg)', padding: '5px 8px', borderRadius: '4px', border: '1px solid var(--border)', marginTop: '4px', color: 'var(--text)' }}>
+                    RAZORPAY_KEY_ID=rzp_test_...<br />
+                    RAZORPAY_KEY_SECRET=...
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Current Subscription Status Banner ── */}
       {status && (
         <div style={{
-          background: 'linear-gradient(165deg, #202226 0%, #17181B 100%)',
+          background: 'var(--card-bg)',
           border: '1px solid var(--border)',
           borderRadius: '16px',
           padding: '1.5rem',
-          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.3)',
+          boxShadow: 'var(--shadow-card)',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: '1.5rem',
@@ -349,8 +549,8 @@ export function AdminBillingPage() {
               key={plan.id}
               style={{
                 background: plan.popular
-                  ? 'linear-gradient(165deg, rgba(255, 90, 40, 0.07) 0%, rgba(32, 34, 38, 0.95) 100%)'
-                  : 'var(--paper)',
+                  ? 'linear-gradient(165deg, rgba(255, 90, 40, 0.08) 0%, var(--card-bg) 100%)'
+                  : 'var(--card-bg)',
                 border: plan.popular ? '1.5px solid var(--accent)' : '1px solid var(--line)',
                 borderRadius: '16px',
                 padding: '1.75rem',
@@ -413,26 +613,53 @@ export function AdminBillingPage() {
                 </ul>
               </div>
 
-              <button
-                type="button"
-                className="button"
-                disabled={isProcessing || isCurrentPlan}
-                onClick={() => handleSubscribe(plan.id)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '10px',
-                  fontWeight: 700,
-                  fontSize: '0.92rem',
-                  background: isCurrentPlan ? 'var(--steel-3)' : plan.popular ? 'var(--accent)' : 'var(--surface-subtle)',
-                  color: isCurrentPlan ? 'var(--text-muted)' : plan.popular ? '#FFFFFF' : 'var(--text)',
-                  border: isCurrentPlan ? 'none' : '1px solid var(--border)',
-                  cursor: isProcessing || isCurrentPlan ? 'default' : 'pointer',
-                  boxShadow: plan.popular && !isCurrentPlan ? '0 4px 16px rgba(255, 90, 40, 0.3)' : 'none',
-                }}
-              >
-                {isCurrentPlan ? '✓ Current Plan' : isProcessing ? 'Connecting Razorpay...' : `Subscribe with Razorpay →`}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  className="button"
+                  disabled={isProcessing || isCurrentPlan}
+                  onClick={() => handleSubscribe(plan.id)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.92rem',
+                    background: isCurrentPlan ? 'var(--steel-3)' : plan.popular ? 'var(--accent)' : 'var(--surface-subtle)',
+                    color: isCurrentPlan ? 'var(--text-muted)' : plan.popular ? '#FFFFFF' : 'var(--text)',
+                    border: isCurrentPlan ? 'none' : '1px solid var(--border)',
+                    cursor: isProcessing || isCurrentPlan ? 'default' : 'pointer',
+                    boxShadow: plan.popular && !isCurrentPlan ? '0 4px 16px rgba(255, 90, 40, 0.3)' : 'none',
+                  }}
+                >
+                  {isCurrentPlan ? '✓ Current Active Plan' : isProcessing ? 'Connecting Razorpay...' : `Subscribe with Razorpay →`}
+                </button>
+
+                {!isCurrentPlan && (
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => handleInstantActivate(plan.id, plan.profile_limit)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 0.8rem',
+                      borderRadius: '8px',
+                      background: 'rgba(95, 163, 127, 0.12)',
+                      border: '1px solid rgba(95, 163, 127, 0.35)',
+                      color: '#6fc797',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      cursor: isProcessing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    ⚡ 1-Click Instant Activate (Test)
+                  </button>
+                )}
+              </div>
             </div>
           )
         })}
@@ -488,15 +715,37 @@ export function AdminBillingPage() {
                 ₹{customRate.toFixed(2)}/profile/month {billingCycle === 'yearly' && '(20% annual savings applied)'}
               </div>
             </div>
-            <button
-              type="button"
-              className="button"
-              disabled={isProcessing}
-              onClick={() => handleSubscribe('custom', customProfiles)}
-              style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.65rem 1.4rem' }}
-            >
-              Subscribe Custom Tier
-            </button>
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="button"
+                disabled={isProcessing}
+                onClick={() => handleSubscribe('custom', customProfiles)}
+                style={{ background: 'var(--accent)', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', border: 'none', padding: '0.65rem 1.4rem' }}
+              >
+                {isProcessing ? 'Connecting...' : 'Subscribe Custom Tier →'}
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => handleInstantActivate('custom', customProfiles)}
+                style={{
+                  background: 'rgba(95, 163, 127, 0.12)',
+                  border: '1px solid rgba(95, 163, 127, 0.35)',
+                  color: '#6fc797',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  padding: '0.65rem 1rem',
+                  fontSize: '0.85rem',
+                  cursor: isProcessing ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                ⚡ 1-Click Instant Activate ({customProfiles.toLocaleString()} Profiles)
+              </button>
+            </div>
           </div>
         </div>
       </SectionCard>
@@ -552,6 +801,19 @@ export function AdminBillingPage() {
           </div>
         )}
       </SectionCard>
+
+      {/* ── Interactive Razorpay Sandbox Test Checkout Modal ── */}
+      <RazorpaySandboxModal
+        isOpen={sandboxModal.isOpen}
+        onClose={() => setSandboxModal((prev) => ({ ...prev, isOpen: false }))}
+        orderId={sandboxModal.orderId}
+        amountInr={sandboxModal.amountInr}
+        planName={sandboxModal.planName}
+        billingCycle={sandboxModal.billingCycle}
+        profileLimit={sandboxModal.profileLimit}
+        onPaymentSuccess={handleSandboxPaymentSuccess}
+        onPaymentFailure={(errMsg) => setError(errMsg)}
+      />
     </div>
   )
 }

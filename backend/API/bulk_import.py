@@ -14,7 +14,7 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -105,11 +105,21 @@ def _check_admin_subscription_access(db: Session, admin_email: str, incoming_row
     """
     from API.billing import get_or_create_subscription
     sub = get_or_create_subscription(db, admin_email)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
+
+    def _to_utc(dt: Optional[datetime]) -> Optional[datetime]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
 
     # Validate active/trial duration
+    current_period_end_utc = _to_utc(sub.current_period_end)
+    trial_end_utc = _to_utc(sub.trial_end)
+
     if sub.status == "active":
-        if sub.current_period_end and sub.current_period_end < now:
+        if current_period_end_utc and current_period_end_utc < now:
             sub.status = "expired"
             db.commit()
             raise HTTPException(
@@ -117,7 +127,7 @@ def _check_admin_subscription_access(db: Session, admin_email: str, incoming_row
                 detail="Your institutional subscription period has expired. Please renew your subscription via Razorpay to continue validating and managing student cohorts.",
             )
     elif sub.status == "trialing":
-        if sub.trial_end and sub.trial_end < now:
+        if trial_end_utc and trial_end_utc < now:
             sub.status = "expired"
             db.commit()
             raise HTTPException(

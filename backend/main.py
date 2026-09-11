@@ -28,7 +28,7 @@ from auth import (
 )
 from security import ENFORCE_HTTPS, verify_password
 
-from database import Base, engine, SessionLocal
+from database import Base, DATABASE_URL, engine, SessionLocal
 from pathlib import Path
 from uuid import uuid4
 
@@ -83,10 +83,13 @@ logger.info(f"FORGR API starting in {ENV} environment", extra={"env": ENV})
 
 # ════════════════════════════════════════════════════════════════
 # DATABASE INITIALIZATION
-# Schema is managed exclusively by Alembic (run via startCommand).
-# Do NOT call Base.metadata.create_all here — it conflicts with Alembic
-# and will attempt DDL before migrations have run.
+# PostgreSQL schema is managed exclusively by Alembic.
+# Local SQLite creates missing tables so uvicorn can start on a fresh clone.
 # ════════════════════════════════════════════════════════════════
+
+if str(DATABASE_URL).startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
+    logger.info("SQLite schema ensured via create_all")
 
 with SessionLocal() as seed_db:
     crud.seed_default_auth_users(seed_db)

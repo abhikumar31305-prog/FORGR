@@ -15,11 +15,14 @@ import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { useAuth } from '../../context/useAuth'
+import { useActiveStudentId } from '../../context/useActiveStudentId'
+import { StudentRecordGate } from '../../components/CohortStudentPicker'
 import { getAttendance, updateAttendance } from '../../services/featureApi'
 import type { AttendanceRecord } from '../../types/domain'
 
 export function AttendancePage() {
   const { session } = useAuth()
+  const { studentId } = useActiveStudentId()
   const [attendanceList, setAttendanceList] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -34,12 +37,15 @@ export function AttendancePage() {
 
   useEffect(() => {
     async function load() {
-      const sid = session?.studentId || '1001'
+      if (!studentId) {
+        setIsLoading(false)
+        return
+      }
       setIsLoading(true)
       setError('')
 
       try {
-        const data = await getAttendance(sid)
+        const data = await getAttendance(studentId)
         setAttendanceList(data)
         if (data.length) {
           const latest = data[data.length - 1]
@@ -56,24 +62,24 @@ export function AttendancePage() {
     }
 
     void load()
-  }, [session])
+  }, [studentId])
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault()
-    const sid = session?.studentId || '1001'
+    if (!studentId) return
     setIsSaving(true)
     setError('')
     setSaveMessage('')
 
     try {
       const pct = Number(percentage)
-      await updateAttendance(sid, {
+      await updateAttendance(studentId, {
         semester: Number(semester),
         attendance_percentage: pct,
         classes_attended: Number(attended),
         classes_conducted: Number(conducted),
       })
-      const refreshed = await getAttendance(sid)
+      const refreshed = await getAttendance(studentId)
       setAttendanceList(refreshed)
       setSaveMessage('Attendance updated successfully.')
     } catch (err) {
@@ -97,6 +103,7 @@ export function AttendancePage() {
   }))
 
   return (
+    <StudentRecordGate>
     <div className="grid stagger">
       <header className="dashboard-hero">
         <p className="eyebrow">Attendance Tracker</p>
@@ -193,5 +200,6 @@ export function AttendancePage() {
         </SectionCard>
       )}
     </div>
+    </StudentRecordGate>
   )
 }

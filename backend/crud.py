@@ -242,6 +242,10 @@ def create_user(db: Session, payload: schemas.RegisterRequest) -> models.User:
     return user
 
 
+def _login_auto_provision_enabled() -> bool:
+    return os.getenv("FORGR_ENV", "development").lower() == "development"
+
+
 def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User:
     input_str = payload.email.strip()
     user = get_user_by_email(db, input_str)
@@ -256,7 +260,7 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
 
         if student is not None:
             user = get_user_by_email(db, student.email)
-            if user is None:
+            if user is None and _login_auto_provision_enabled():
                 user = models.User(
                     email=student.email.strip().lower(),
                     password_hash=hash_password(payload.password),
@@ -269,7 +273,7 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
                 return user
 
         # 2. Check if parent login matches parent format (e.g. parent1001@forgr.app or parent1001)
-        if input_str.lower().startswith("parent"):
+        if user is None and input_str.lower().startswith("parent"):
             digits = "".join(filter(str.isdigit, input_str))
             if digits:
                 student = db.query(models.Student).filter(
@@ -278,7 +282,7 @@ def authenticate_user(db: Session, payload: schemas.LoginRequest) -> models.User
                 if student is not None:
                     user_email = f"parent_{student.student_id}@forgr.app"
                     user = get_user_by_email(db, user_email)
-                    if user is None:
+                    if user is None and _login_auto_provision_enabled():
                         user = models.User(
                             email=user_email,
                             password_hash=hash_password(payload.password),
@@ -390,66 +394,74 @@ def record_edit_action(
     )
 
 
-def seed_default_auth_users(db: Session) -> None:
-    if db.query(models.User).first() is not None:
-        return
+DEMO_STUDENT_EMAIL = "student@forgr.app"
+DEMO_PARENT_EMAIL = "parent1@forgr.app"
+DEMO_WARD_STUDENT_ID = "1001"
 
-    first_student = db.query(models.Student).order_by(models.Student.id).first()
+
+def _demo_ward(db: Session) -> models.Student | None:
+    preferred = (
+        db.query(models.Student)
+        .filter(models.Student.student_id == DEMO_WARD_STUDENT_ID)
+        .first()
+    )
+    if preferred is not None:
+        return preferred
+    return db.query(models.Student).order_by(models.Student.id).first()
+
+
+def _link_if_unresolved(user: models.User, ward_id: int | None) -> None:
+    if ward_id is None or user.linked_profile_id is not None:
+        return
+    user.linked_profile_id = ward_id
+
+
+def seed_default_auth_users(db: Session) -> None:
+    """Create demo users and re-link student/parent accounts after data import.
+
+    Safe to call repeatedly: existing users are kept, missing demo accounts are
+    created, and unlinked student/parent rows are attached to student 1001
+    (or the first imported student if 1001 is absent).
+    """
     seed_password = os.getenv("FORGR_SEED_PASSWORD", "demo123")
+    ward = _demo_ward(db)
+    ward_id = ward.id if ward is not None else None
 
     seed_rows = [
-        {
-            "email": "admin@forgr.app",
-            "password": seed_password,
-            "role": "admin",
-            "linked_profile_id": None,
-        },
-        {
-            "email": "faculty@forgr.app",
-            "password": seed_password,
-            "role": "faculty",
-            "linked_profile_id": None,
-        },
-        {
-            "email": "placement@forgr.app",
-            "password": seed_password,
-            "role": "placement_cell",
-            "linked_profile_id": None,
-        },
-        {
-            "email": "recruiter@forgr.app",
-            "password": seed_password,
-            "role": "recruiter",
-            "linked_profile_id": None,
-        },
-        {
-            "email": "parent1@forgr.app",
-            "password": seed_password,
-            "role": "parent",
-            "linked_profile_id": first_student.id if first_student is not None else None,
-        },
+        {"email": "admin@forgr.app", "role": "admin", "linked_profile_id": None},
+        {"email": "faculty@forgr.app", "role": "faculty", "linked_profile_id": None},
+        {"email": "placement@forgr.app", "role": "placement_cell", "linked_profile_id": None},
+        {"email": "recruiter@forgr.app", "role": "recruiter", "linked_profile_id": None},
+        {"email": DEMO_PARENT_EMAIL, "role": "parent", "linked_profile_id": ward_id},
+        {"email": DEMO_STUDENT_EMAIL, "role": "student", "linked_profile_id": ward_id},
     ]
-
-    if first_student is not None:
+    if ward is not None and ward.email.strip().lower() != DEMO_STUDENT_EMAIL:
         seed_rows.append(
             {
-                "email": first_student.email,
-                "password": seed_password,
+                "email": ward.email.strip().lower(),
                 "role": "student",
-                "linked_profile_id": first_student.id,
+                "linked_profile_id": ward.id,
             }
         )
 
     for row in seed_rows:
-        if get_user_by_email(db, row["email"]) is None:
+        user = get_user_by_email(db, row["email"])
+        if user is None:
             db.add(
                 models.User(
-                    email=row["email"],
-                    password_hash=hash_password(row["password"]),
+                    email=row["email"].strip().lower(),
+                    password_hash=hash_password(seed_password),
                     role=row["role"],
                     linked_profile_id=row["linked_profile_id"],
                 )
             )
+            continue
+        if row["role"] in ("student", "parent"):
+            if user.linked_profile_id is not None:
+                linked = db.query(models.Student).filter(models.Student.id == user.linked_profile_id).first()
+                if linked is None:
+                    user.linked_profile_id = None
+            _link_if_unresolved(user, row["linked_profile_id"])
 
     db.commit()
 

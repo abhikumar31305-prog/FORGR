@@ -2,6 +2,8 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, type ReactNode } from 'react'
 import { useAuth } from '../../context/useAuth'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { ActiveStudentProvider } from '../../context/ActiveStudentContext'
+import { CohortStudentPicker } from '../CohortStudentPicker'
 import { UpdatePasswordModal } from '../auth/UpdatePasswordModal'
 import type { Role } from '../../types/auth'
 
@@ -205,6 +207,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   return (
+    <ActiveStudentProvider>
     <div className="layout">
       <button
         type="button"
@@ -301,6 +304,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <CohortStudentPicker />
             <button
               type="button"
               onClick={() => setIsPasswordModalOpen(true)}
@@ -354,5 +358,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         onClose={() => setIsPasswordModalOpen(false)}
       />
     </div>
+    </ActiveStudentProvider>
   )
 }

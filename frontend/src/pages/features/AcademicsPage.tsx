@@ -14,11 +14,14 @@ import {
 import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { useAuth } from '../../context/useAuth'
+import { useActiveStudentId } from '../../context/useActiveStudentId'
+import { StudentRecordGate } from '../../components/CohortStudentPicker'
 import { getAcademics, updateAcademics } from '../../services/featureApi'
 import type { AcademicRecord } from '../../types/domain'
 
 export function AcademicsPage() {
   const { session } = useAuth()
+  const { studentId } = useActiveStudentId()
   const [academics, setAcademics] = useState<AcademicRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -33,17 +36,16 @@ export function AcademicsPage() {
 
   useEffect(() => {
     async function load() {
-      if (!session?.studentId && session?.role !== 'admin') {
+      if (!studentId) {
         setIsLoading(false)
         return
       }
 
-      const sid = session?.studentId || '1001'
       setIsLoading(true)
       setError('')
 
       try {
-        const data = await getAcademics(sid)
+        const data = await getAcademics(studentId)
         setAcademics(data)
         if (data.length) {
           const latest = data[data.length - 1]
@@ -60,23 +62,23 @@ export function AcademicsPage() {
     }
 
     void load()
-  }, [session])
+  }, [studentId])
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault()
-    const sid = session?.studentId || '1001'
+    if (!studentId) return
     setIsSaving(true)
     setError('')
     setSaveMessage('')
 
     try {
-      await updateAcademics(sid, {
+      await updateAcademics(studentId, {
         semester: Number(semester),
         cgpa: Number(cgpa),
         sgpa: Number(sgpa),
         backlogs: Number(backlogs),
       })
-      const refreshed = await getAcademics(sid)
+      const refreshed = await getAcademics(studentId)
       setAcademics(refreshed)
       setSaveMessage('Academic records updated successfully.')
     } catch (err) {
@@ -98,6 +100,7 @@ export function AcademicsPage() {
   }))
 
   return (
+    <StudentRecordGate>
     <div className="grid stagger">
       <header className="dashboard-hero">
         <p className="eyebrow">Academic Intelligence</p>
@@ -222,5 +225,6 @@ export function AcademicsPage() {
         </SectionCard>
       )}
     </div>
+    </StudentRecordGate>
   )
 }

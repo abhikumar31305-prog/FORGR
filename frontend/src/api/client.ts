@@ -51,7 +51,15 @@ async function parseError(response: Response) {
     if (typeof body.detail === 'string') {
       detail = body.detail
     } else if (Array.isArray(body.detail)) {
-      detail = body.detail.map((d: any) => (typeof d === 'string' ? d : d.msg || JSON.stringify(d))).join(', ')
+      detail = body.detail
+        .map((d: unknown) =>
+          typeof d === 'string'
+            ? d
+            : typeof d === 'object' && d !== null && 'msg' in d
+              ? String((d as { msg?: unknown }).msg)
+              : JSON.stringify(d),
+        )
+        .join(', ')
     } else if (typeof body.message === 'string') {
       detail = body.message
     } else if (body.detail) {

@@ -64,8 +64,9 @@ export function UpdatePasswordModal({ isOpen, onClose }: UpdatePasswordModalProp
       setTimeout(() => {
         handleClose()
       }, 1500)
-    } catch (err: any) {
-      setError(err?.message || 'Failed to update password. Please verify your current password.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update password. Please verify your current password.'
+      setError(msg)
     } finally {
       setIsLoading(false)
     }

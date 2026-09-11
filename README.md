@@ -34,6 +34,17 @@ python -m uvicorn main:app --reload --port 8000
 ```
 API Documentation available at: `http://localhost:8000/docs`
 
+Local SQLite (`backend/forgr.db`) creates tables on startup. Load demo students, then re-link login accounts:
+
+```bash
+cd backend
+python import_data.py
+```
+
+Demo logins (password `demo123` unless `FORGR_SEED_PASSWORD` is set): `admin@forgr.app`, `student@forgr.app`, `parent1@forgr.app`, `faculty@forgr.app`, `placement@forgr.app`, `recruiter@forgr.app`.
+
+PostgreSQL deployments must run migrations before the API starts (`alembic upgrade head` from the repo root, or `FORGR_RUN_MIGRATIONS=true` in Docker). Do not use `create_all` against Postgres — it conflicts with Alembic.
+
 ### 2. Frontend Setup
 ```bash
 cd frontend

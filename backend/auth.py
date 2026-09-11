@@ -42,23 +42,30 @@ def _display_name_for_user(db: Session, user: models.User) -> str:
     return student.name
 
 
-def build_user_response(db: Session, user: models.User) -> schemas.AuthUserResponse:
-    student_id = None
+def _student_for_user(db: Session, user: models.User) -> models.Student | None:
     if user.linked_profile_id is not None:
         student = db.query(models.Student).filter(models.Student.id == user.linked_profile_id).first()
-        student_id = student.student_id if student is not None else None
-    elif _role_value(user.role) == "student":
-        # Fallback: match by email or link to first active student record
-        student = db.query(models.Student).filter(models.Student.email == user.email).first()
-        if not student:
-            student = db.query(models.Student).first()
-        if student:
-            student_id = student.student_id
-            user.linked_profile_id = student.id
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
+        if student is not None:
+            return student
+    if _role_value(user.role) == "student":
+        return db.query(models.Student).filter(models.Student.email == user.email).first()
+    return None
+
+
+def _persist_profile_link(db: Session, user: models.User, student: models.Student) -> None:
+    if user.linked_profile_id == student.id:
+        return
+    user.linked_profile_id = student.id
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def build_user_response(db: Session, user: models.User) -> schemas.AuthUserResponse:
+    student = _student_for_user(db, user)
+    if student is not None:
+        _persist_profile_link(db, user, student)
 
     return schemas.AuthUserResponse(
         id=user.id,
@@ -66,7 +73,7 @@ def build_user_response(db: Session, user: models.User) -> schemas.AuthUserRespo
         email=user.email,
         role=_role_value(user.role),
         linked_profile_id=user.linked_profile_id,
-        student_id=student_id,
+        student_id=student.student_id if student is not None else None,
         created_at=user.created_at,
     )
 
@@ -158,20 +165,9 @@ def check_student_access(current_user: models.User, target_student_id: str, db: 
         return
 
     if role == "student":
-        student = None
-        if current_user.linked_profile_id:
-            student = db.query(models.Student).filter(models.Student.id == current_user.linked_profile_id).first()
-        if not student:
-            student = db.query(models.Student).filter(models.Student.email == current_user.email).first()
-        if not student and current_user.email == "student@forgr.app":
-            student = db.query(models.Student).first()
-
-        if student and current_user.linked_profile_id != student.id:
-            current_user.linked_profile_id = student.id
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
+        student = _student_for_user(db, current_user)
+        if student is not None:
+            _persist_profile_link(db, current_user, student)
 
         if not student or student.student_id != target_student_id:
             raise HTTPException(
@@ -181,19 +177,17 @@ def check_student_access(current_user: models.User, target_student_id: str, db: 
         return
 
     if role == "parent":
-        target_student = db.query(models.Student).filter(models.Student.student_id == target_student_id).first()
-        if target_student is None:
+        if not current_user.linked_profile_id:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Student record '{target_student_id}' not found.",
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: No linked student record for this parent account.",
             )
-        # Update linked ward to selected target student if different
-        if current_user.linked_profile_id != target_student.id:
-            current_user.linked_profile_id = target_student.id
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
+        student = db.query(models.Student).filter(models.Student.id == current_user.linked_profile_id).first()
+        if not student or student.student_id != target_student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You can only access your linked ward's records.",
+            )
         return
 
     if role == "recruiter":

@@ -53,8 +53,8 @@ export function SettingsPage() {
       setNewPassword('')
       setConfirmPassword('')
       setMessage(res.message || 'Password updated successfully.')
-    } catch (err: any) {
-      setError(err?.message || 'Failed to update password. Please check your current password.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update password. Please check your current password.')
     } finally {
       setIsSavingPassword(false)
     }

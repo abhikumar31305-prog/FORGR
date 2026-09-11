@@ -12,11 +12,14 @@ import { SectionCard } from '../../components/ui/SectionCard'
 import { StatCard } from '../../components/ui/StatCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { useAuth } from '../../context/useAuth'
+import { useActiveStudentId } from '../../context/useActiveStudentId'
+import { StudentRecordGate } from '../../components/CohortStudentPicker'
 import { getPortfolio, getSkills, updatePortfolio, updateSkills } from '../../services/featureApi'
 import type { PortfolioRecord, SkillRecord } from '../../types/domain'
 
 export function SkillsPage() {
   const { session } = useAuth()
+  const { studentId } = useActiveStudentId()
   const [skills, setSkills] = useState<SkillRecord | null>(null)
   const [portfolio, setPortfolio] = useState<PortfolioRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -40,12 +43,15 @@ export function SkillsPage() {
 
   useEffect(() => {
     async function load() {
-      const sid = session?.studentId || '1001'
+      if (!studentId) {
+        setIsLoading(false)
+        return
+      }
       setIsLoading(true)
       setError('')
 
       try {
-        const [sk, po] = await Promise.all([getSkills(sid), getPortfolio(sid)])
+        const [sk, po] = await Promise.all([getSkills(studentId), getPortfolio(studentId)])
         setSkills(sk)
         setPortfolio(po)
 
@@ -73,18 +79,18 @@ export function SkillsPage() {
     }
 
     void load()
-  }, [session])
+  }, [studentId])
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault()
-    const sid = session?.studentId || '1001'
+    if (!studentId) return
     setIsSaving(true)
     setError('')
     setSaveMessage('')
 
     try {
       await Promise.all([
-        updateSkills(sid, {
+        updateSkills(studentId, {
           python: Number(python),
           java: Number(java),
           sql: Number(sql),
@@ -93,7 +99,7 @@ export function SkillsPage() {
           communication: Number(comm),
           coding_score: Number(codingScore),
         }),
-        updatePortfolio(sid, {
+        updatePortfolio(studentId, {
           projects: Number(projects),
           certifications: Number(certs),
           github_repositories: Number(githubRepos),
@@ -101,7 +107,7 @@ export function SkillsPage() {
         }),
       ])
 
-      const [refSk, refPo] = await Promise.all([getSkills(sid), getPortfolio(sid)])
+      const [refSk, refPo] = await Promise.all([getSkills(studentId), getPortfolio(studentId)])
       setSkills(refSk)
       setPortfolio(refPo)
       setSaveMessage('Skills & portfolio updated successfully!')
@@ -124,6 +130,7 @@ export function SkillsPage() {
   ]
 
   return (
+    <StudentRecordGate>
     <div className="grid stagger">
       <header className="dashboard-hero">
         <p className="eyebrow">Skills & Portfolio</p>
@@ -239,5 +246,6 @@ export function SkillsPage() {
         </SectionCard>
       )}
     </div>
+    </StudentRecordGate>
   )
 }

@@ -2697,6 +2697,66 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ── Product UI polish ─────────────────────────────────────────────── */
+body {
+  background: var(--graphite);
+  color: var(--off-white);
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+}
+
+.layout {
+  background:
+    radial-gradient(circle at 78% -10%, rgba(255, 90, 40, 0.08), transparent 34rem),
+    var(--graphite);
+}
+
+.main {
+  isolation: isolate;
+}
+
+.fg-panel,
+.fg-card,
+.card,
+.panel {
+  border-color: color-mix(in srgb, var(--line) 86%, transparent);
+  box-shadow: var(--shadow-card);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.fg-panel:hover,
+.fg-card:hover,
+.card:hover,
+.panel:hover {
+  border-color: color-mix(in srgb, var(--ember) 34%, var(--line));
+  box-shadow: var(--shadow-card-hover);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Pulse Keyframes for Indicators */
 @keyframes pulse-gentle {
   0%, 100% {

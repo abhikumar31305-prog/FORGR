@@ -221,16 +221,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* ===== SIDEBAR ===== */}
       <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}`}>
         <div className="fg-brand">
-<img
-              className="fg-brand-logo fg-logo-dark"
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/forgr_black-38CQtT83ZamTHFcc0d2HiVWLrIQ61A.png"
-              alt="FORGR"
-            />
-            <img
-              className="fg-brand-logo fg-logo-light"
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-OQPPgRdQe8SzCwH7AU8UjxkteVMHFx.png"
-              alt="FORGR"
-            />
+          <img
+            className="fg-brand-logo"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/forgr_black-38CQtT83ZamTHFcc0d2HiVWLrIQ61A.png"
+            alt="FORGR"
+          />
         </div>
 
         <div className="fg-nav-label">Workspace</div>

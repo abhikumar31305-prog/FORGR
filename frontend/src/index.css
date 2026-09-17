@@ -89,6 +89,20 @@
   --border: #E2E8F0;
 }
 
+.fg-logo-light {
+  display: none !important;
+}
+
+[data-theme="light"] .fg-logo-dark,
+.light-theme .fg-logo-dark {
+  display: none !important;
+}
+
+[data-theme="light"] .fg-logo-light,
+.light-theme .fg-logo-light {
+  display: block !important;
+}
+
 /* Base utility buttons and tables */
 .button {
   display: inline-flex;

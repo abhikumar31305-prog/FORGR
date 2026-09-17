@@ -145,8 +145,13 @@ export const LandingPage: React.FC = () => {
         <div className="landing-nav-container">
           <Link to="/" className="landing-brand">
             <img
-              className="landing-brand-logo"
+              className="landing-brand-logo fg-logo-dark"
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/forgr_black-38CQtT83ZamTHFcc0d2HiVWLrIQ61A.png"
+              alt="FORGR student platform"
+            />
+            <img
+              className="landing-brand-logo fg-logo-light"
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-OQPPgRdQe8SzCwH7AU8UjxkteVMHFx.png"
               alt="FORGR student platform"
             />
           </Link>

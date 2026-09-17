@@ -96,11 +96,8 @@ export function LoginPage() {
 
           <div className="forgr-brand-mark" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }} title="Return to Landing Page">
-              <img
-                className="forgr-brand-logo"
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/forgr_black-38CQtT83ZamTHFcc0d2HiVWLrIQ61A.png"
-                alt="FORGR"
-              />
+              <div className="forgr-glyph">F</div>
+              <span>FORGR</span>
             </Link>
           </div>
 

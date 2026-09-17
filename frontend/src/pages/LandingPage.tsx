@@ -144,11 +144,16 @@ export const LandingPage: React.FC = () => {
       <header className="landing-nav-header">
         <div className="landing-nav-container">
           <Link to="/" className="landing-brand">
-            <img
-              className="landing-brand-logo"
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/forgr_black-38CQtT83ZamTHFcc0d2HiVWLrIQ61A.png"
-              alt="FORGR student platform"
-            />
+            <div className="landing-brand-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+                <path d="M12 8v8M8 12h8" strokeWidth="1.5" />
+              </svg>
+            </div>
+            <div className="landing-brand-text">
+              <span className="brand-name">FORGR</span>
+              <span className="brand-badge">STUDENT PLATFORM</span>
+            </div>
           </Link>
 
           <nav className={`landing-nav-links ${mobileMenuOpen ? 'open' : ''}`}>

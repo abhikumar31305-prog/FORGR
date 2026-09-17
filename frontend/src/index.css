@@ -645,14 +645,12 @@ a:focus-visible {
 
 .fg-brand-logo {
   width: 112px;
-  height: 36px;
+  height: 34px;
   object-fit: cover;
   object-position: center;
   border-radius: 6px;
   display: block;
   flex-shrink: 0;
-  background: #0b0d0f;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
   }
 
 .fg-glyph {
@@ -1738,13 +1736,6 @@ a:focus-visible {
   object-position: center;
   border-radius: 7px;
   display: block;
-  background: #0b0d0f;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.18);
-  }
-
-[data-theme="light"] .forgr-brand-logo,
-.light-theme .forgr-brand-logo {
-  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.18);
   }
 
 .forgr-glyph {
@@ -2858,19 +2849,12 @@ select:focus-visible {
 }
 
 .landing-brand-logo {
-  width: 154px;
-  height: 46px;
+  width: 142px;
+  height: 42px;
   object-fit: cover;
   object-position: center;
   border-radius: 7px;
   display: block;
-  background: #0b0d0f;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.14);
-  }
-
-[data-theme="light"] .landing-brand-logo,
-.light-theme .landing-brand-logo {
-  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.16);
   }
 
 .landing-brand-icon {
@@ -4628,7 +4612,7 @@ select:focus-visible {
   color: #FF5A28 !important;
 }
 
-/* ═════════════════════��════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════
    ── MODERN CLEAN UI POLISH (LIGHT & DARK MODE EXCELLENCE) ───────────
    ══════════════════════════════════════════════════════════════════════ */
 
